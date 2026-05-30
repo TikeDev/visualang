@@ -394,4 +394,9 @@ async def transcript_upload(file: UploadFile = File(...)):
 @router.get("/media/audio/{filename}")
 async def get_audio_file(filename: str):
     path = resolve_audio_file(filename)
-    return FileResponse(path, media_type=audio_media_type(path), filename=path.name)
+    return FileResponse(
+        path,
+        media_type=audio_media_type(path),
+        filename=path.name,
+        content_disposition_type="inline",
+    )

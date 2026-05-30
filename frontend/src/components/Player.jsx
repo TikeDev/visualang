@@ -36,28 +36,31 @@ export default function Player({ images, audioSrc, title }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
-  const [isReady, setIsReady] = useState(false)
+  const [areImagesReady, setAreImagesReady] = useState(false)
+  const [isAudioReady, setIsAudioReady] = useState(false)
+  const [audioError, setAudioError] = useState('')
   const [isPlaying, setIsPlaying] = useState(false)
   const [playbackRate, setPlaybackRate] = useState(1)
   const audioRef = useRef(null)
   const loadedRef = useRef(0)
   const progressValue = duration > 0 ? Math.min(currentTime, duration) : 0
+  const canPlay = areImagesReady && isAudioReady && !audioError
 
   useEffect(() => {
     loadedRef.current = 0
     setCurrentIndex(0)
-    setIsReady(false)
+    setAreImagesReady(false)
     if (images.length === 0) return
 
     images.forEach(image => {
       const img = new Image()
       img.onload = () => {
         loadedRef.current += 1
-        if (loadedRef.current === images.length) setIsReady(true)
+        if (loadedRef.current === images.length) setAreImagesReady(true)
       }
       img.onerror = () => {
         loadedRef.current += 1
-        if (loadedRef.current === images.length) setIsReady(true)
+        if (loadedRef.current === images.length) setAreImagesReady(true)
       }
       img.src = image.image_url
     })
@@ -91,7 +94,15 @@ export default function Player({ images, audioSrc, title }) {
     }
 
     function handleLoadedState() {
+      setAudioError('')
+      setIsAudioReady(true)
       syncFromAudio()
+    }
+
+    function handleAudioError() {
+      setIsAudioReady(false)
+      setIsPlaying(false)
+      setAudioError('Narration audio could not be loaded.')
     }
 
     audio.addEventListener('play', handlePlayEvent)
@@ -99,20 +110,28 @@ export default function Player({ images, audioSrc, title }) {
     audio.addEventListener('ended', handleEndedEvent)
     audio.addEventListener('timeupdate', syncFromAudio)
     audio.addEventListener('seeked', syncFromAudio)
+    audio.addEventListener('canplay', handleLoadedState)
     audio.addEventListener('loadeddata', handleLoadedState)
     audio.addEventListener('loadedmetadata', handleLoadedState)
     audio.addEventListener('durationchange', handleLoadedState)
+    audio.addEventListener('error', handleAudioError)
 
     syncFromAudio()
+    if (audio.readyState >= 1) {
+      handleLoadedState()
+    }
+
     return () => {
       audio.removeEventListener('play', handlePlayEvent)
       audio.removeEventListener('pause', handlePauseEvent)
       audio.removeEventListener('ended', handleEndedEvent)
       audio.removeEventListener('timeupdate', syncFromAudio)
       audio.removeEventListener('seeked', syncFromAudio)
+      audio.removeEventListener('canplay', handleLoadedState)
       audio.removeEventListener('loadeddata', handleLoadedState)
       audio.removeEventListener('loadedmetadata', handleLoadedState)
       audio.removeEventListener('durationchange', handleLoadedState)
+      audio.removeEventListener('error', handleAudioError)
     }
   }, [images, audioSrc])
 
@@ -122,6 +141,8 @@ export default function Player({ images, audioSrc, title }) {
     audio.pause()
     audio.currentTime = 0
     setIsPlaying(false)
+    setIsAudioReady(false)
+    setAudioError(audioSrc ? '' : 'Narration audio is not available.')
     setCurrentIndex(0)
     setCurrentTime(0)
     setDuration(0)
@@ -134,9 +155,11 @@ export default function Player({ images, audioSrc, title }) {
   }, [playbackRate])
 
   function handlePlay() {
+    if (!canPlay) return
     audioRef.current?.play().catch(err => {
       console.error('[Visualang] Audio play failed:', err)
       setIsPlaying(false)
+      setAudioError('Narration audio could not be played.')
     })
   }
 
@@ -154,7 +177,7 @@ export default function Player({ images, audioSrc, title }) {
 
   function handleSeekChange(event) {
     const audio = audioRef.current
-    if (!audio) return
+    if (!audio || !canPlay) return
 
     const nextTime = Number.parseFloat(event.target.value)
     if (!Number.isFinite(nextTime)) return
@@ -166,7 +189,9 @@ export default function Player({ images, audioSrc, title }) {
 
   return (
     <section className="player-card" aria-label="Illustrated preview player">
-      {audioSrc && <audio ref={audioRef} src={audioSrc} style={{ display: 'none' }} />}
+      {audioSrc && (
+        <audio ref={audioRef} src={audioSrc} preload="metadata" style={{ display: 'none' }} />
+      )}
 
       <div className="player-card__stage">
         {images.map((image, index) => {
@@ -204,23 +229,34 @@ export default function Player({ images, audioSrc, title }) {
         <div className="player-card__controls">
           <div className="player-card__controls-top">
             <div className="player-card__controls-main">
-              {!isReady ? (
+              {!canPlay ? (
                 <div className="player-card__loading">
-                  <CircleNotch size={22} style={{ animation: 'spin 1s linear infinite' }} />
-                  <span>Loading images...</span>
+                  {!audioError && (
+                    <CircleNotch
+                      size={22}
+                      aria-hidden="true"
+                      style={{ animation: 'spin 1s linear infinite' }}
+                    />
+                  )}
+                  <span
+                    className={audioError ? 'player-card__error' : undefined}
+                    role={audioError ? 'alert' : undefined}
+                  >
+                    {audioError || (!areImagesReady ? 'Loading images...' : 'Loading narration...')}
+                  </span>
                 </div>
               ) : (
                 <button
                   type="button"
                   className="player-card__play-button"
                   onClick={isPlaying ? handlePause : handlePlay}
-                  disabled={!isReady}
+                  disabled={!canPlay}
                   aria-label={isPlaying ? 'Pause narration' : 'Play narration'}
                 >
                   {isPlaying ? (
-                    <Pause size={22} weight="fill" />
+                    <Pause size={22} weight="fill" aria-hidden="true" />
                   ) : (
-                    <Play size={22} weight="fill" />
+                    <Play size={22} weight="fill" aria-hidden="true" />
                   )}
                 </button>
               )}
@@ -259,7 +295,7 @@ export default function Player({ images, audioSrc, title }) {
               step="0.1"
               value={progressValue}
               onChange={handleSeekChange}
-              disabled={!isReady || duration === 0}
+              disabled={!canPlay || duration === 0}
               aria-label="Seek preview"
             />
             <span className="player-card__time" aria-label="Total duration">

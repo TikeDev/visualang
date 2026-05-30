@@ -677,6 +677,11 @@ a {
   font-size: 1rem;
 }
 
+.player-card__error {
+  color: #ffd8cf;
+  font-weight: 700;
+}
+
 .player-card__play-button {
   flex-shrink: 0;
   width: 3.5rem;
@@ -688,6 +693,11 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.player-card__play-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .player-card__title {

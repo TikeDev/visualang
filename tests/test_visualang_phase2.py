@@ -560,6 +560,7 @@ def test_media_audio_route_serves_existing_file():
         response = client.get(f"/media/audio/{audio_path.name}")
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("audio/mpeg")
+        assert "inline" in response.headers["content-disposition"]
         assert response.content == b"fake-audio"
     finally:
         audio_path.unlink(missing_ok=True)

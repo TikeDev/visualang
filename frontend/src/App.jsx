@@ -20,6 +20,8 @@ const THEMES = {
   LIGHT: 'light',
   DARK: 'dark',
 }
+const EXPORT_POLL_INTERVAL_MS = 3000
+const EXPORT_POLL_TIMEOUT_MS = 15 * 60 * 1000
 
 const STATES = {
   IDLE: 'idle',
@@ -405,9 +407,30 @@ export default function App() {
 
   async function pollExport(jobId) {
     clearExportPoll()
+    const startedAt = Date.now()
     exportPollRef.current = setInterval(async () => {
+      if (Date.now() - startedAt > EXPORT_POLL_TIMEOUT_MS) {
+        clearExportPoll()
+        setExportErrorMessage('Video export took too long. Retry export from the preview.')
+        transition(setAppState, STATES.EXPORT_FAILED)
+        return
+      }
+
       try {
         const res = await fetch(`${API_URL}/export/${jobId}`)
+        if (!res.ok) {
+          const detail = await readErrorMessage(res)
+          clearExportPoll()
+          console.error('[Visualang] Export status failed:', detail)
+          setExportErrorMessage(
+            res.status === 404
+              ? 'Video export status was lost on the server. Retry export from the preview.'
+              : 'Video export status could not be checked. Retry export from the preview.'
+          )
+          transition(setAppState, STATES.EXPORT_FAILED)
+          return
+        }
+
         const data = await res.json()
         if (data.status === 'done') {
           clearExportPoll()
@@ -423,8 +446,11 @@ export default function App() {
         }
       } catch (err) {
         console.error('[Visualang] Export poll failed:', err)
+        clearExportPoll()
+        setExportErrorMessage('Video export status could not be checked. Retry export from the preview.')
+        transition(setAppState, STATES.EXPORT_FAILED)
       }
-    }, 3000)
+    }, EXPORT_POLL_INTERVAL_MS)
   }
 
   function buildSteps() {

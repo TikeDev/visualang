@@ -1,3 +1,4 @@
+import asyncio
 import os
 import shutil
 import subprocess
@@ -35,6 +36,10 @@ def _write_image(name: str) -> Path:
 def _cleanup_paths(*paths: Path):
     for path in paths:
         path.unlink(missing_ok=True)
+
+
+def _cleanup_job_metadata(job_id: str):
+    export.get_job_metadata_path(job_id).unlink(missing_ok=True)
 
 
 def test_get_ken_burns_variant_wraps_deterministically():
@@ -159,14 +164,15 @@ def test_start_export_route_accepts_multiple_images_and_writes_zip(monkeypatch):
     image_two = _write_image("route-two.jpg")
     captured = {}
     job_id = None
+    output_path = None
 
     async def fake_run_ffmpeg_export(job_id, audio_path, images, output_path):
         captured["job_id"] = job_id
         captured["audio_path"] = audio_path
         captured["images"] = images
         captured["output_path"] = output_path
-        export.jobs[job_id]["status"] = "done"
-        export.jobs[job_id]["video_path"] = output_path
+        Path(output_path).write_bytes(b"fake-video")
+        export.update_job(job_id, status="done", video_path=output_path)
 
     monkeypatch.setattr(export, "run_ffmpeg_export", fake_run_ffmpeg_export)
 
@@ -195,8 +201,12 @@ def test_start_export_route_accepts_multiple_images_and_writes_zip(monkeypatch):
     try:
         assert response.status_code == 200
         job_id = response.json()["job_id"]
+        output_path = Path(captured["output_path"])
         assert captured["job_id"] == job_id
         assert len(captured["images"]) == 2
+
+        metadata_path = export.get_job_metadata_path(job_id)
+        assert metadata_path.exists()
 
         zip_path = Path(export.jobs[job_id]["zip_path"])
         transcript_path = Path(export.jobs[job_id]["transcript_path"])
@@ -209,13 +219,61 @@ def test_start_export_route_accepts_multiple_images_and_writes_zip(monkeypatch):
                 "01_3s_scene_two.jpg",
             ]
         assert transcript_path.read_text() == "[00:00] hola"
+
+        export.jobs.clear()
+
+        status_response = client.get(f"/export/{job_id}")
+        assert status_response.status_code == 200
+        assert status_response.json()["status"] == "done"
+
+        video_response = client.get(f"/export/{job_id}/video")
+        assert video_response.status_code == 200
+        assert video_response.content == b"fake-video"
+
+        transcript_response = client.get(f"/export/{job_id}/transcript")
+        assert transcript_response.status_code == 200
+        assert transcript_response.text == "[00:00] hola"
+
+        images_response = client.get(f"/export/{job_id}/images")
+        assert images_response.status_code == 200
+        assert images_response.headers["content-type"].startswith("application/zip")
     finally:
         cleanup_targets = [image_one, image_two]
-        if job_id and job_id in export.jobs:
+        if job_id:
+            job = export.load_persisted_job(job_id) or {}
+            cleanup_targets.append(export.get_job_metadata_path(job_id))
             cleanup_targets.extend(
-                [
-                    Path(export.jobs[job_id]["zip_path"]),
-                    Path(export.jobs[job_id]["transcript_path"]),
+                Path(value)
+                for value in [
+                    output_path,
+                    job.get("zip_path"),
+                    job.get("transcript_path"),
+                    job.get("video_path"),
                 ]
+                if value
             )
         _cleanup_paths(*cleanup_targets)
+
+
+def test_run_ffmpeg_export_persists_error_status(monkeypatch):
+    job_id = "failed-export-test"
+    export.jobs[job_id] = {"status": "pending", "video_path": None}
+    export.persist_job(job_id)
+
+    monkeypatch.setattr(
+        export,
+        "build_ffmpeg_args",
+        lambda audio_path, images, output_path: ["visualang-missing-ffmpeg-binary"],
+    )
+
+    try:
+        asyncio.run(export.run_ffmpeg_export(job_id, "/tmp/missing.mp3", [], "/tmp/missing.mp4"))
+        export.jobs.clear()
+
+        status_response = client.get(f"/export/{job_id}")
+        assert status_response.status_code == 200
+        body = status_response.json()
+        assert body["status"] == "error"
+        assert "visualang-missing-ffmpeg-binary" in body["error"]
+    finally:
+        _cleanup_job_metadata(job_id)

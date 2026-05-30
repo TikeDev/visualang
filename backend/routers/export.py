@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import uuid
 import zipfile
@@ -68,6 +69,57 @@ class ExportRequest(BaseModel):
     audio_path: str
     images: list[ExportImage]
     transcript: list = []
+
+
+def get_job_metadata_path(job_id: str) -> Path:
+    return IMAGE_DIR / f"{job_id}.json"
+
+
+def persist_job(job_id: str) -> None:
+    job = jobs.get(job_id)
+    if job is None:
+        return
+
+    path = get_job_metadata_path(job_id)
+    tmp_path = path.with_suffix(".json.tmp")
+    tmp_path.write_text(json.dumps(job), encoding="utf-8")
+    tmp_path.replace(path)
+
+
+def update_job(job_id: str, **fields) -> dict:
+    job = jobs.setdefault(job_id, {"status": "pending", "video_path": None})
+    job.update(fields)
+    persist_job(job_id)
+    return job
+
+
+def load_persisted_job(job_id: str) -> dict | None:
+    if job_id in jobs:
+        return jobs[job_id]
+
+    path = get_job_metadata_path(job_id)
+    if not path.is_file():
+        return None
+
+    try:
+        job = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        logger.warning("Could not parse export job metadata for %s", job_id)
+        return None
+
+    if not isinstance(job, dict):
+        logger.warning("Export job metadata for %s was not an object", job_id)
+        return None
+
+    jobs[job_id] = job
+    return job
+
+
+def require_job(job_id: str) -> dict:
+    job = load_persisted_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
 
 
 def format_seconds(value: float) -> str:
@@ -270,7 +322,7 @@ def build_ffmpeg_args(
 
 
 async def run_ffmpeg_export(job_id: str, audio_path: str, images: list, output_path: str):
-    jobs[job_id]["status"] = "running"
+    update_job(job_id, status="running")
     try:
         ffmpeg_args = build_ffmpeg_args(audio_path, images, output_path)
         logger.info(f"Running FFmpeg export for job {job_id}")
@@ -282,19 +334,16 @@ async def run_ffmpeg_export(job_id: str, audio_path: str, images: list, output_p
         _, stderr = await proc.communicate()
         if proc.returncode != 0:
             logger.error(f"FFmpeg failed for job {job_id}: {stderr.decode()}")
-            jobs[job_id]["status"] = "error"
-            jobs[job_id]["error"] = stderr.decode()
+            update_job(job_id, status="error", error=stderr.decode())
             return
 
         output_size = Path(output_path).stat().st_size
         logger.info(f"FFmpeg export complete for job {job_id}: {output_size} bytes")
-        jobs[job_id]["status"] = "done"
-        jobs[job_id]["video_path"] = output_path
+        update_job(job_id, status="done", video_path=output_path)
 
     except Exception as e:
         logger.error(f"Export failed for job {job_id}: {e}")
-        jobs[job_id]["status"] = "error"
-        jobs[job_id]["error"] = str(e)
+        update_job(job_id, status="error", error=str(e))
 
 
 @router.post("/export")
@@ -304,6 +353,7 @@ async def start_export(body: ExportRequest, background_tasks: BackgroundTasks):
 
     images_dicts = [img.model_dump() for img in body.images]
     jobs[job_id] = {"status": "pending", "video_path": None}
+    persist_job(job_id)
 
     background_tasks.add_task(
         run_ffmpeg_export, job_id, body.audio_path, images_dicts, output_path
@@ -318,7 +368,7 @@ async def start_export(body: ExportRequest, background_tasks: BackgroundTasks):
             mm, ss = divmod(start, 60)
             lines.append(f"[{mm:02d}:{ss:02d}] {seg.get('text', '')}")
         txt_path.write_text("\n".join(lines))
-        jobs[job_id]["transcript_path"] = str(txt_path)
+        update_job(job_id, transcript_path=str(txt_path))
 
     zip_path = IMAGE_DIR / f"{job_id}_images.zip"
     with zipfile.ZipFile(zip_path, "w") as zf:
@@ -329,37 +379,41 @@ async def start_export(body: ExportRequest, background_tasks: BackgroundTasks):
                 ts = int(img.timestamp_seconds)
                 concept = img.concept.replace(" ", "_")[:40]
                 zf.write(img_path, f"{i:02d}_{ts}s_{concept}.jpg")
-    jobs[job_id]["zip_path"] = str(zip_path)
+    update_job(job_id, zip_path=str(zip_path))
 
     return {"job_id": job_id}
 
 
 @router.get("/export/{job_id}")
 async def get_export_status(job_id: str):
-    if job_id not in jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return jobs[job_id]
+    return require_job(job_id)
 
 
 @router.get("/export/{job_id}/video")
 async def download_video(job_id: str):
-    if job_id not in jobs or jobs[job_id].get("status") != "done":
+    job = require_job(job_id)
+    video_path = job.get("video_path")
+    if job.get("status") != "done" or not video_path or not Path(video_path).is_file():
         raise HTTPException(status_code=404, detail="Video not ready")
-    return FileResponse(jobs[job_id]["video_path"], media_type="video/mp4",
+    return FileResponse(video_path, media_type="video/mp4",
                         filename="visualang.mp4")
 
 
 @router.get("/export/{job_id}/transcript")
 async def download_transcript(job_id: str):
-    if job_id not in jobs or "transcript_path" not in jobs[job_id]:
+    job = require_job(job_id)
+    transcript_path = job.get("transcript_path")
+    if not transcript_path or not Path(transcript_path).is_file():
         raise HTTPException(status_code=404, detail="Transcript not available")
-    return FileResponse(jobs[job_id]["transcript_path"], media_type="text/plain",
+    return FileResponse(transcript_path, media_type="text/plain",
                         filename="transcript.txt")
 
 
 @router.get("/export/{job_id}/images")
 async def download_images(job_id: str):
-    if job_id not in jobs or "zip_path" not in jobs[job_id]:
+    job = require_job(job_id)
+    zip_path = job.get("zip_path")
+    if not zip_path or not Path(zip_path).is_file():
         raise HTTPException(status_code=404, detail="Images zip not available")
-    return FileResponse(jobs[job_id]["zip_path"], media_type="application/zip",
+    return FileResponse(zip_path, media_type="application/zip",
                         filename="visualang_images.zip")
