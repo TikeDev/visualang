@@ -26,6 +26,49 @@ class GateResult:
     detected_language: str
 
 
+def _coerce_verdict(value: str) -> Verdict:
+    if value not in {"proceed", "warn", "reject"}:
+        raise ValueError(f"invalid gate verdict: {value}")
+    return value
+
+
+def fallback_gate_result(transcript: list[dict]) -> GateResult:
+    wpm_result = tools.count_wpm_handler(transcript=transcript)
+    silence_result = tools.silence_handler(transcript=transcript)
+    speech_seconds = sum(float(seg.get("duration", 0)) for seg in transcript)
+    wpm = float(wpm_result["wpm"])
+    silence_ratio = float(silence_result["silence_ratio"])
+
+    if speech_seconds < 20 or wpm < 10:
+        return GateResult(
+            "reject",
+            (
+                "deterministic quality check rejected transcript "
+                f"({wpm:.1f} WPM, {speech_seconds:.1f}s speech)"
+            ),
+            "unknown",
+        )
+
+    if wpm < 35 or silence_ratio > 0.7:
+        return GateResult(
+            "warn",
+            (
+                "deterministic quality check found unusual speech density "
+                f"({wpm:.1f} WPM, silence ratio {silence_ratio:.2f})"
+            ),
+            "unknown",
+        )
+
+    return GateResult(
+        "proceed",
+        (
+            "deterministic quality check passed after parser failure "
+            f"({wpm:.1f} WPM, silence ratio {silence_ratio:.2f})"
+        ),
+        "unknown",
+    )
+
+
 async def _gate_node(state: dict) -> str:
     transcript = state["transcript"]
     title = state["title"]
@@ -52,17 +95,13 @@ async def _gate_node(state: dict) -> str:
     try:
         parsed = base.parse_json_strict(text)
         state["result"] = GateResult(
-            verdict=parsed["verdict"],
+            verdict=_coerce_verdict(parsed["verdict"]),
             reason=parsed["reason"],
             detected_language=parsed.get("detected_language", "unknown"),
         )
-    except (ValueError, KeyError) as e:
-        logger.warning("gate parse failed (%s), defaulting to proceed", e)
-        state["result"] = GateResult(
-            verdict="proceed",
-            reason="quality check skipped after parser failure",
-            detected_language="unknown",
-        )
+    except (ValueError, KeyError, TypeError) as e:
+        logger.warning("gate parse failed (%s), using deterministic fallback", e)
+        state["result"] = fallback_gate_result(transcript)
     return END
 
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 from typing import Any, Callable
 
@@ -192,6 +193,28 @@ async def run_claude_with_tools(
     raise RuntimeError(f"tool loop exceeded {max_iterations} iterations")
 
 
+def _parse_json_candidate(candidate: str) -> Any:
+    decoder = json.JSONDecoder()
+    cleaned = candidate.strip()
+
+    try:
+        value, end = decoder.raw_decode(cleaned)
+    except json.JSONDecodeError:
+        pass
+    else:
+        if cleaned[end:].strip() == "":
+            return value
+
+    for match in re.finditer(r"[\[{]", cleaned):
+        try:
+            value, _ = decoder.raw_decode(cleaned[match.start():])
+        except json.JSONDecodeError:
+            continue
+        return value
+
+    raise json.JSONDecodeError("No JSON object or array found", cleaned, 0)
+
+
 def parse_json_strict(text: str) -> Any:
     """Parse a JSON response, stripping accidental markdown fences if present.
 
@@ -199,13 +222,15 @@ def parse_json_strict(text: str) -> Any:
     the model actually produced when parsing fails.
     """
     cleaned = text.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3]
-        cleaned = cleaned.strip()
     try:
-        return json.loads(cleaned)
+        return _parse_json_candidate(cleaned)
     except json.JSONDecodeError as e:
+        fence_matches = re.findall(r"```(?:json)?\s*([\s\S]*?)```", cleaned, flags=re.IGNORECASE)
+        for fenced in fence_matches:
+            try:
+                return _parse_json_candidate(fenced)
+            except json.JSONDecodeError:
+                continue
+
         logger.warning("JSON parse failed. Raw response:\n%s", text)
         raise ValueError(f"model returned malformed JSON: {e}") from e

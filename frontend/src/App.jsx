@@ -107,6 +107,28 @@ async function readErrorMessage(response) {
   return message
 }
 
+function isFetchNetworkError(error) {
+  return error instanceof TypeError && /fetch|network|load failed/i.test(error.message)
+}
+
+function formatPipelineError(stage, error) {
+  const stageLabels = {
+    transcript: 'Transcript fetch',
+    concepts: 'Concept extraction',
+    generate: 'Image generation',
+    exportStart: 'Video export start',
+    exportStatus: 'Video export status check',
+  }
+  const label = stageLabels[stage] || 'Request'
+
+  if (isFetchNetworkError(error)) {
+    return `${label} could not reach the backend. Check that ${API_URL} is available and that CORS allows this frontend origin.`
+  }
+
+  const detail = error?.message || 'Unknown error'
+  return `${label} failed: ${detail}`
+}
+
 function toAbsoluteUrl(url) {
   if (!url || /^https?:\/\//.test(url)) return url
   return `${API_URL}${url.startsWith('/') ? url : `/${url}`}`
@@ -212,6 +234,10 @@ export default function App() {
   useEffect(() => clearExportPoll, [])
 
   useEffect(() => {
+    console.info('[Visualang] API URL:', API_URL)
+  }, [])
+
+  useEffect(() => {
     document.documentElement.dataset.theme = theme
     document.documentElement.style.colorScheme = theme
     try {
@@ -303,7 +329,7 @@ export default function App() {
       console.log(`[Visualang] Transcript: ${transcriptData.transcript.length} segments`)
     } catch (err) {
       console.error('[Visualang] Transcript failed:', err)
-      setError(err.message || 'Failed to fetch transcript. Please try again.')
+      setError(formatPipelineError('transcript', err))
       setAppState(STATES.IDLE)
       return
     }
@@ -324,7 +350,7 @@ export default function App() {
       console.log(`[Visualang] Concepts: ${concepts.length}`)
     } catch (err) {
       console.error('[Visualang] Concepts failed:', err)
-      setError(err.message || 'Failed to extract concepts. Please try again.')
+      setError(formatPipelineError('concepts', err))
       setAppState(STATES.IDLE)
       return
     }
@@ -370,7 +396,7 @@ export default function App() {
       }
     } catch (err) {
       console.error('[Visualang] Image generation failed:', err)
-      setError(err.message || 'Image generation failed. Please try again.')
+      setError(formatPipelineError('generate', err))
       setAppState(STATES.IDLE)
       return
     }
@@ -400,7 +426,7 @@ export default function App() {
       pollExport(job_id)
     } catch (err) {
       console.error('[Visualang] Export start failed:', err)
-      setExportErrorMessage('Video export could not start. Retry export from the preview.')
+      setExportErrorMessage(formatPipelineError('exportStart', err))
       transition(setAppState, STATES.EXPORT_FAILED)
     }
   }
@@ -424,8 +450,8 @@ export default function App() {
           console.error('[Visualang] Export status failed:', detail)
           setExportErrorMessage(
             res.status === 404
-              ? 'Video export status was lost on the server. Retry export from the preview.'
-              : 'Video export status could not be checked. Retry export from the preview.'
+              ? 'This export job is no longer available on the server. Retry export from this preview.'
+              : `Video export status could not be checked: ${detail}`
           )
           transition(setAppState, STATES.EXPORT_FAILED)
           return
@@ -447,7 +473,7 @@ export default function App() {
       } catch (err) {
         console.error('[Visualang] Export poll failed:', err)
         clearExportPoll()
-        setExportErrorMessage('Video export status could not be checked. Retry export from the preview.')
+        setExportErrorMessage(formatPipelineError('exportStatus', err))
         transition(setAppState, STATES.EXPORT_FAILED)
       }
     }, EXPORT_POLL_INTERVAL_MS)

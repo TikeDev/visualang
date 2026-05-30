@@ -82,7 +82,7 @@ SILENCE_SCHEMA = {
 
 
 def silence_handler(*, transcript: list[dict]) -> dict:
-    if len(transcript) < 2:
+    if not transcript:
         return {"silence_ratio": 1.0, "total_seconds": 0.0}
     total = transcript[-1]["start"] + transcript[-1]["duration"]
     speech = sum(seg["duration"] for seg in transcript)

@@ -14,6 +14,7 @@ from youtube_transcript_api.proxies import GenericProxyConfig
 from agents import transcript_gate
 from config import (
     OPENAI_API_KEY,
+    YT_DLP_DENO_PATH,
     YOUTUBE_PROXY_ENABLED,
     YOUTUBE_PROXY_HTTP_URL,
     YOUTUBE_PROXY_HTTPS_URL,
@@ -35,6 +36,17 @@ AUDIO_MEDIA_TYPES = {
     ".wav": "audio/wav",
     ".webm": "audio/webm",
 }
+
+
+class YtDlpLogBridge:
+    def debug(self, msg: str):
+        logger.debug("yt-dlp: %s", msg)
+
+    def warning(self, msg: str):
+        logger.warning("yt-dlp: %s", msg)
+
+    def error(self, msg: str):
+        logger.error("yt-dlp: %s", msg)
 
 
 # --- Normalizers ---
@@ -99,7 +111,12 @@ def build_youtube_transcript_api():
 
 
 def build_yt_dlp_options(*, skip_download: bool = False, output_base: str | None = None) -> dict:
-    ydl_opts = {"quiet": True}
+    ydl_opts = {
+        "quiet": True,
+        "noprogress": True,
+        "logger": YtDlpLogBridge(),
+        "js_runtimes": {"deno": {"path": YT_DLP_DENO_PATH}},
+    }
     if skip_download:
         ydl_opts["skip_download"] = True
     if output_base is not None:

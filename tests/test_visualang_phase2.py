@@ -1,3 +1,4 @@
+import asyncio
 import io
 import os
 import sys
@@ -11,6 +12,7 @@ if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
 from main import app
+from agents import base, transcript_gate as gate_module
 from routers import concepts, transcript
 
 
@@ -249,6 +251,7 @@ def test_get_video_info_uses_proxy_for_yt_dlp(monkeypatch):
     monkeypatch.setattr(transcript, "YOUTUBE_PROXY_ENABLED", True)
     monkeypatch.setattr(transcript, "YOUTUBE_PROXY_HTTP_URL", "http://proxy.example:8080")
     monkeypatch.setattr(transcript, "YOUTUBE_PROXY_HTTPS_URL", "https://proxy.example:8443")
+    monkeypatch.setattr(transcript, "YT_DLP_DENO_PATH", "/opt/deno/bin/deno")
     monkeypatch.setattr(transcript.yt_dlp, "YoutubeDL", FakeYoutubeDL)
 
     info = transcript.get_video_info("https://www.youtube.com/watch?v=abc123")
@@ -256,6 +259,11 @@ def test_get_video_info_uses_proxy_for_yt_dlp(monkeypatch):
     assert info == {"title": "Breakfast Spanish", "duration": 42}
     assert FakeYoutubeDL.last_opts["proxy"] == "https://proxy.example:8443"
     assert FakeYoutubeDL.last_opts["skip_download"] is True
+    assert FakeYoutubeDL.last_opts["noprogress"] is True
+    assert FakeYoutubeDL.last_opts["js_runtimes"] == {
+        "deno": {"path": "/opt/deno/bin/deno"}
+    }
+    assert hasattr(FakeYoutubeDL.last_opts["logger"], "warning")
 
 
 def test_extract_audio_uses_proxy_for_yt_dlp(monkeypatch):
@@ -269,6 +277,17 @@ def test_extract_audio_uses_proxy_for_yt_dlp(monkeypatch):
     assert FakeYoutubeDL.last_opts["proxy"] == "http://proxy.example:8080"
     assert FakeYoutubeDL.last_opts["outtmpl"] == "/tmp/visualang_images/abc123"
     assert FakeYoutubeDL.last_opts["format"] == "bestaudio/best"
+    assert FakeYoutubeDL.last_opts["noprogress"] is True
+
+
+def test_yt_dlp_options_allow_missing_deno_path(monkeypatch):
+    monkeypatch.setattr(transcript, "YT_DLP_DENO_PATH", None)
+
+    opts = transcript.build_yt_dlp_options()
+
+    assert opts["js_runtimes"] == {"deno": {"path": None}}
+    assert opts["noprogress"] is True
+    assert hasattr(opts["logger"], "error")
 
 
 def test_transcript_youtube_falls_back_to_whisper_with_proxy_enabled(monkeypatch):
@@ -391,11 +410,64 @@ def test_transcript_upload_rejects_files_over_25_mb():
     assert response.json()["detail"] == "File exceeds 25 MB limit."
 
 
+def test_parse_json_strict_accepts_embedded_fenced_json():
+    parsed = base.parse_json_strict(
+        """Based on the inspection results:
+```json
+{"verdict": "proceed", "reason": "usable", "detected_language": "es"}
+```
+"""
+    )
+
+    assert parsed == {"verdict": "proceed", "reason": "usable", "detected_language": "es"}
+
+
+def test_transcript_gate_parses_embedded_json(monkeypatch):
+    async def fake_run_claude_with_tools(**kwargs):
+        return (
+            "Summary first.\n"
+            '```json\n{"verdict": "warn", "reason": "language ambiguous", '
+            '"detected_language": "unknown"}\n```'
+        )
+
+    monkeypatch.setattr(gate_module.base, "run_claude_with_tools", fake_run_claude_with_tools)
+
+    result = asyncio.run(
+        gate_module.run(
+            [{"text": "hola mundo " * 30, "start": 0.0, "duration": 30.0}],
+            title="Spanish lesson",
+            duration=30.0,
+        )
+    )
+
+    assert result.verdict == "warn"
+    assert result.reason == "language ambiguous"
+    assert result.detected_language == "unknown"
+
+
+def test_transcript_gate_parse_failure_uses_deterministic_fallback(monkeypatch):
+    async def fake_run_claude_with_tools(**kwargs):
+        return "I inspected the transcript, but forgot to return JSON."
+
+    monkeypatch.setattr(gate_module.base, "run_claude_with_tools", fake_run_claude_with_tools)
+
+    result = asyncio.run(
+        gate_module.run(
+            [{"text": "hola mundo " * 80, "start": 0.0, "duration": 60.0}],
+            title="Spanish lesson",
+            duration=60.0,
+        )
+    )
+
+    assert result.verdict == "proceed"
+    assert "deterministic quality check passed" in result.reason
+
+
 def test_transcript_gate_reject_returns_422(monkeypatch):
     monkeypatch.setattr(
         transcript,
         "YouTubeTranscriptApi",
-        lambda: FakeYouTubeTranscriptApi(
+        lambda **kwargs: FakeYouTubeTranscriptApi(
             [
                 FakeCaptionTrack(
                     language_code="es",
@@ -499,7 +571,7 @@ def test_transcript_youtube_falls_back_to_generated_non_english_track(monkeypatc
     monkeypatch.setattr(
         transcript,
         "YouTubeTranscriptApi",
-        lambda: FakeYouTubeTranscriptApi(
+        lambda **kwargs: FakeYouTubeTranscriptApi(
             [
                 FakeCaptionTrack(
                     language_code="es",

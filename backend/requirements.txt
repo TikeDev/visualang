@@ -5,7 +5,7 @@ anthropic
 openai
 requests
 youtube-transcript-api==1.2.4
-yt-dlp
+yt-dlp[default]
 httpx
 ffmpeg-python
 python-multipart

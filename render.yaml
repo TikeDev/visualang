@@ -14,8 +14,8 @@ services:
     runtime: python
     plan: starter
     rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    buildCommand: curl -fsSL https://deno.land/install.sh | sh && pip install -r requirements.txt
+    startCommand: export PATH="$HOME/.deno/bin:$PATH" && uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
       - key: ANTHROPIC_API_KEY
@@ -31,4 +31,6 @@ services:
       - key: YOUTUBE_PROXY_HTTP_URL
         sync: false
       - key: YOUTUBE_PROXY_HTTPS_URL
+        sync: false
+      - key: YT_DLP_DENO_PATH
         sync: false

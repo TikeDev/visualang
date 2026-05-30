@@ -40,6 +40,7 @@ tests/      VisuaLang-focused tests
 
 - Node.js with `pnpm`
 - Python 3
+- Deno available on your shell path for YouTube extraction through `yt-dlp`
 - `ffmpeg` available on your shell path for video export
 
 ### Quick start
@@ -115,6 +116,7 @@ CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 YOUTUBE_PROXY_ENABLED=false
 YOUTUBE_PROXY_HTTP_URL=
 YOUTUBE_PROXY_HTTPS_URL=
+YT_DLP_DENO_PATH=
 NUNCHAKU_MIN_INTERVAL_SECONDS=2.0
 NUNCHAKU_MAX_429_RETRIES=4
 NUNCHAKU_BACKOFF_BASE_SECONDS=3.0
@@ -127,6 +129,7 @@ Notes:
 - Hosted YouTube ingestion on Render is likely to fail without a rotating proxy because YouTube blocks many cloud-provider IPs.
 - Set `YOUTUBE_PROXY_ENABLED=true` and configure `YOUTUBE_PROXY_HTTP_URL` and/or `YOUTUBE_PROXY_HTTPS_URL` when you want hosted YouTube transcript fetches and `yt-dlp` requests to run through a proxy.
 - If only one proxy URL is provided, the backend reuses it for both transcript fetches and `yt-dlp` requests.
+- `YT_DLP_DENO_PATH` is optional. Leave it empty when `deno` is already on `PATH`; set it to the Deno executable path if the backend process cannot find Deno.
 - The Nunchaku retry and throttle settings control spacing and backoff around image generation requests.
 - Generated images and uploaded audio are stored under `/tmp/visualang_images`.
 

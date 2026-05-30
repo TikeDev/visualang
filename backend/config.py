@@ -1,4 +1,5 @@
 import os
+import shutil
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -67,6 +68,7 @@ YOUTUBE_PROXY_ENABLED = _get_bool(
     "YOUTUBE_PROXY_ENABLED",
     bool(YOUTUBE_PROXY_HTTP_URL or YOUTUBE_PROXY_HTTPS_URL),
 )
+YT_DLP_DENO_PATH = _get_optional_str("YT_DLP_DENO_PATH") or shutil.which("deno")
 
 # Nunchaku settings
 NUNCHAKU_MODEL = "nunchaku-flux.2-klein-9b"

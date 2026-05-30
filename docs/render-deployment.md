@@ -33,8 +33,8 @@ Create a Render Web Service with these settings if you are not using the Bluepri
 - Runtime: `Python`
 - Plan: `Starter`
 - Root Directory: `backend`
-- Build Command: `pip install -r requirements.txt`
-- Start Command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+- Build Command: `curl -fsSL https://deno.land/install.sh | sh && pip install -r requirements.txt`
+- Start Command: `export PATH="$HOME/.deno/bin:$PATH" && uvicorn main:app --host 0.0.0.0 --port $PORT`
 - Health Check Path: `/health`
 
 ### Backend Environment Variables
@@ -45,6 +45,10 @@ Set these in Render:
 - `OPENAI_API_KEY`
 - `NUNCHAKU_API_KEY`
 - `CORS_ALLOWED_ORIGINS`
+- `YOUTUBE_PROXY_ENABLED`
+- `YOUTUBE_PROXY_HTTP_URL`
+- `YOUTUBE_PROXY_HTTPS_URL`
+- `YT_DLP_DENO_PATH` only if Deno is not available on `PATH`
 
 Set `CORS_ALLOWED_ORIGINS` to the exact deployed frontend origin, for example:
 
