@@ -103,8 +103,9 @@ Three small additions sit beside the agents:
 - **`scripts/seed_demo.py` + `routers/demo.py`** — `python scripts/seed_demo.py
   --slug <name> --url <yt-url>` runs the full pipeline once and saves the
   outputs under `backend/demo_seeds/<slug>/`. The `/demo/<slug>` endpoint then
-  serves those canned results without hitting live APIs — drop `?demo=<slug>`
-  into the frontend URL to use a seeded fixture during the pitch.
+  serves those canned results without hitting live APIs. The current frontend
+  demo mode is only partially wired; it does not yet load a specific seeded
+  slug from `?demo=<slug>`.
 
 ## Adding a new agent
 

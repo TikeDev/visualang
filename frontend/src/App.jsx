@@ -80,11 +80,9 @@ async function fetchWithRetry(url, options, onRetry) {
       }
       return res
     } catch (err) {
-      if (attempt === 2) {
-        onRetry?.('Connection issue, retrying...')
-      } else if (attempt === 3) {
-        throw err
-      }
+      if (attempt === 3) throw err
+      if (attempt === 2) onRetry?.('Connection issue, retrying...')
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
     }
   }
 }
