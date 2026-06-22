@@ -3,6 +3,7 @@ import os
 import sys
 
 import pytest
+from fastapi.testclient import TestClient
 
 BACKEND_DIR = os.path.join(os.path.dirname(__file__), "..", "backend")
 if BACKEND_DIR not in sys.path:
@@ -10,6 +11,8 @@ if BACKEND_DIR not in sys.path:
 
 from job_store import JobStore  # noqa: E402
 from job_runner import JobRunner  # noqa: E402
+from routers import jobs as jobs_router  # noqa: E402
+from main import app  # noqa: E402
 
 
 YOUTUBE_SOURCE = {"kind": "youtube", "url": "https://example.test/video"}
@@ -159,3 +162,77 @@ def test_reconcile_marks_running_jobs_interrupted(tmp_path):
         == "interrupted"
     )
     assert store.get_by_resume_token(expired.resume_token, now=101) is None
+
+
+@pytest.fixture()
+def job_test_client(tmp_path, monkeypatch):
+    store = JobStore(tmp_path)
+    calls = []
+    runner = make_runner(store, calls)
+
+    monkeypatch.setattr(jobs_router, "get_job_store", lambda: store)
+    monkeypatch.setattr(jobs_router, "get_job_runner", lambda: runner)
+
+    with TestClient(app) as client:
+        yield client, store, calls
+
+
+def test_create_get_cancel_retry_delete_job(job_test_client):
+    client, store, calls = job_test_client
+
+    created = client.post(
+        "/jobs", json={"type": "youtube", "url": "https://youtu.be/example"}
+    )
+    assert created.status_code == 202
+    token = created.json()["resume_token"]
+
+    get_response = client.get(f"/jobs/{token}")
+    assert get_response.status_code == 200
+    body = get_response.json()
+    assert "id" not in body or "path" not in str(body)
+    assert get_response.headers["cache-control"] == "no-store"
+    assert get_response.headers["referrer-policy"] == "no-referrer"
+
+    cancelled = client.post(f"/jobs/{token}/cancel")
+    assert cancelled.status_code == 200
+
+    retried = client.post(f"/jobs/{token}/retry")
+    assert retried.status_code == 202
+
+    deleted = client.delete(f"/jobs/{token}")
+    assert deleted.status_code == 204
+
+    assert client.get(f"/jobs/{token}").status_code == 404
+
+
+def test_wrong_resume_secret_is_not_found(job_test_client):
+    client, store, calls = job_test_client
+
+    created = client.post(
+        "/jobs", json={"type": "youtube", "url": "https://youtu.be/example"}
+    )
+    job_id = created.json()["resume_token"].split(".", 1)[0]
+
+    assert client.get(f"/jobs/{job_id}.wrong-secret").status_code == 404
+
+
+def test_job_response_never_exposes_filesystem_paths(job_test_client):
+    client, store, calls = job_test_client
+
+    created = client.post(
+        "/jobs", json={"type": "youtube", "url": "https://youtu.be/example"}
+    )
+    token = created.json()["resume_token"]
+    job_id = token.split(".", 1)[0]
+    store.update(
+        job_id,
+        status="error",
+        stage="export",
+        error="boom",
+        video_path=f"/var/data/visualang/jobs/{job_id}/video.mp4",
+    )
+
+    body = client.get(f"/jobs/{token}").json()
+
+    assert "/var/data" not in str(body)
+    assert "video_path" not in body

@@ -133,7 +133,7 @@ IMAGE_DIR = VISUALANG_DATA_DIR / "artifacts"
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/images", StaticFiles(directory=str(IMAGE_DIR)), name="images")
 
-from routers import transcript, concepts, generate, export, metrics, demo  # noqa: E402
+from routers import transcript, concepts, generate, export, metrics, demo, jobs  # noqa: E402
 
 app.include_router(transcript.router)
 app.include_router(concepts.router)
@@ -141,6 +141,7 @@ app.include_router(generate.router)
 app.include_router(export.router)
 app.include_router(metrics.router)
 app.include_router(demo.router)
+app.include_router(jobs.router)
 
 
 @app.get("/health")
