@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import shutil
 from dotenv import load_dotenv
 
@@ -69,6 +70,8 @@ YOUTUBE_PROXY_ENABLED = _get_bool(
     bool(YOUTUBE_PROXY_HTTP_URL or YOUTUBE_PROXY_HTTPS_URL),
 )
 YT_DLP_DENO_PATH = _get_optional_str("YT_DLP_DENO_PATH") or shutil.which("deno")
+VISUALANG_DATA_DIR = Path(os.getenv("VISUALANG_DATA_DIR", "/tmp/visualang_data"))
+JOB_RETENTION_SECONDS = _get_int("JOB_RETENTION_SECONDS", 86400)
 
 # Nunchaku settings
 NUNCHAKU_MODEL = "nunchaku-flux.2-klein-9b"

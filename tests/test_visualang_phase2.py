@@ -132,7 +132,7 @@ def test_transcript_youtube_unified_success(monkeypatch):
             {"text": "hola", "start": 0.0, "duration": 1.2},
             {"text": "mundo", "start": 1.2, "duration": 1.0},
         ],
-        "audio_path": "/tmp/visualang_images/abc123.mp3",
+        "audio_path": str(transcript.IMAGE_DIR / "abc123.mp3"),
         "audio_url": "/media/audio/abc123.mp3",
         "title": "Breakfast Spanish",
         "gate": {
@@ -178,7 +178,7 @@ def test_transcript_youtube_shorts_success(monkeypatch):
         {"text": "buenas", "start": 0.0, "duration": 0.8},
         {"text": "tardes", "start": 0.8, "duration": 0.9},
     ]
-    assert response.json()["audio_path"] == "/tmp/visualang_images/abc123.mp3"
+    assert response.json()["audio_path"] == str(transcript.IMAGE_DIR / "abc123.mp3")
     assert response.json()["audio_url"] == "/media/audio/abc123.mp3"
 
 
@@ -318,7 +318,7 @@ def test_transcript_youtube_falls_back_to_whisper_with_proxy_enabled(monkeypatch
 
     assert response.status_code == 200
     assert response.json()["title"] == "Fallback Lesson"
-    assert response.json()["audio_path"] == "/tmp/visualang_images/abc123.mp3"
+    assert response.json()["audio_path"] == str(transcript.IMAGE_DIR / "abc123.mp3")
     assert response.json()["transcript"] == [
         {"text": "hola", "start": 0.0, "duration": 1.0},
         {"text": "otra vez", "start": 1.0, "duration": 1.5},
@@ -529,7 +529,7 @@ def test_transcript_youtube_falls_back_to_whisper_when_captions_fail(monkeypatch
 
     assert response.status_code == 200
     assert captured["extract_audio_calls"] == 1
-    assert captured["transcribe_audio_path"] == "/tmp/visualang_images/abc123.mp3"
+    assert captured["transcribe_audio_path"] == str(transcript.IMAGE_DIR / "abc123.mp3")
     assert response.json()["transcript"] == [
         {"text": "hola desde whisper", "start": 0.0, "duration": 1.0},
         {"text": "seguimos", "start": 1.0, "duration": 1.2},
@@ -539,7 +539,7 @@ def test_transcript_youtube_falls_back_to_whisper_when_captions_fail(monkeypatch
         "reason": "captions missing, whisper used",
         "detected_language": "es",
     }
-    assert response.json()["audio_path"] == "/tmp/visualang_images/abc123.mp3"
+    assert response.json()["audio_path"] == str(transcript.IMAGE_DIR / "abc123.mp3")
     assert response.json()["audio_url"] == "/media/audio/abc123.mp3"
 
 

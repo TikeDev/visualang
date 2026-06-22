@@ -23,8 +23,10 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def reset_export_state():
     export.jobs.clear()
+    export.active_processes.clear()
     yield
     export.jobs.clear()
+    export.active_processes.clear()
 
 
 def _write_image(name: str) -> Path:
@@ -90,6 +92,10 @@ def test_build_ffmpeg_args_contains_non_empty_filter_graph(tmp_path):
         assert filter_graph.count("settb=AVTB") == 2
         assert filter_graph.count(f"setpts=N/({export.EXPORT_FPS}*TB)") == 2
         assert args[args.index("-map") + 1] == "[video]"
+        assert "-nostdin" in args
+        assert args[args.index("-loglevel") + 1] == "error"
+        assert args[args.index("-preset") + 1] == "veryfast"
+        assert args[args.index("-threads") + 1] == "1"
     finally:
         _cleanup_paths(image_one, image_two)
 
@@ -277,3 +283,202 @@ def test_run_ffmpeg_export_persists_error_status(monkeypatch):
         assert "visualang-missing-ffmpeg-binary" in body["error"]
     finally:
         _cleanup_job_metadata(job_id)
+
+
+def test_get_export_status_marks_interrupted_running_job_as_error():
+    job_id = "interrupted-export-test"
+    output_path = export.IMAGE_DIR / f"{job_id}.mp4"
+    export.jobs[job_id] = {
+        "status": "running",
+        "video_path": None,
+        "output_path": str(output_path),
+        "created_at": export.PROCESS_STARTED_AT - 10,
+        "started_at": export.PROCESS_STARTED_AT - 5,
+        "updated_at": export.PROCESS_STARTED_AT - 5,
+    }
+    export.persist_job(job_id)
+    export.jobs.clear()
+
+    try:
+        response = client.get(f"/export/{job_id}")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "error"
+        assert "server restart" in body["error"]
+    finally:
+        _cleanup_job_metadata(job_id)
+        _cleanup_paths(output_path)
+
+
+def test_cancel_export_terminates_active_process_and_cleans_registry():
+    class FakeProcess:
+        def __init__(self):
+            self.terminated = False
+            self.killed = False
+
+        def terminate(self):
+            self.terminated = True
+
+        def kill(self):
+            self.killed = True
+
+        async def wait(self):
+            return -15
+
+    process = FakeProcess()
+    export.jobs["cancel-job"] = {"status": "running", "video_path": None}
+    export.active_processes["cancel-job"] = process
+
+    try:
+        cancelled = asyncio.run(export.cancel_export("cancel-job"))
+
+        assert cancelled is True
+        assert process.terminated is True
+        assert process.killed is False
+        assert export.jobs["cancel-job"]["status"] == "cancelled"
+        assert "cancel-job" not in export.active_processes
+    finally:
+        _cleanup_job_metadata("cancel-job")
+
+
+def test_cancel_export_kills_process_that_does_not_terminate(monkeypatch):
+    class FakeProcess:
+        def __init__(self):
+            self.terminated = False
+            self.killed = False
+            self.release = asyncio.Event()
+
+        def terminate(self):
+            self.terminated = True
+
+        def kill(self):
+            self.killed = True
+            self.release.set()
+
+        async def wait(self):
+            await self.release.wait()
+            return -9
+
+    process = FakeProcess()
+    export.jobs["kill-job"] = {"status": "running", "video_path": None}
+    export.active_processes["kill-job"] = process
+    monkeypatch.setattr(export, "EXPORT_CANCEL_TIMEOUT_SECONDS", 0.001)
+
+    try:
+        cancelled = asyncio.run(export.cancel_export("kill-job"))
+
+        assert cancelled is True
+        assert process.terminated is True
+        assert process.killed is True
+        assert "kill-job" not in export.active_processes
+    finally:
+        _cleanup_job_metadata("kill-job")
+
+
+def test_run_ffmpeg_export_preserves_cancelled_status_and_cleans_registry(
+    monkeypatch, tmp_path
+):
+    job_id = "cancelled-run-job"
+
+    class FakeProcess:
+        pid = 4321
+        returncode = -15
+
+        async def wait(self):
+            assert export.active_processes[job_id] is self
+            export.update_job(job_id, status="cancelled", error=None)
+            return self.returncode
+
+        def kill(self):
+            raise AssertionError("completed wait should not be killed")
+
+    process = FakeProcess()
+
+    async def fake_create_subprocess_exec(*args, **kwargs):
+        return process
+
+    export.jobs[job_id] = {"status": "pending", "video_path": None}
+    monkeypatch.setattr(export, "build_ffmpeg_args", lambda *args: ["ffmpeg"])
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+
+    try:
+        asyncio.run(
+            export.run_ffmpeg_export(
+                job_id, "/tmp/audio.mp3", [], str(tmp_path / "cancelled.mp4")
+            )
+        )
+
+        assert export.jobs[job_id]["status"] == "cancelled"
+        assert "error" not in export.jobs[job_id] or export.jobs[job_id]["error"] is None
+        assert job_id not in export.active_processes
+    finally:
+        _cleanup_job_metadata(job_id)
+        _cleanup_paths(export.IMAGE_DIR / f"{job_id}_ffmpeg.stderr.log")
+
+
+def test_cancelling_ffmpeg_runner_shuts_down_child_and_removes_partials(
+    monkeypatch, tmp_path
+):
+    job_id = "runner-task-cancelled"
+    output_path = tmp_path / "partial.mp4"
+    wait_started = asyncio.Event()
+
+    class FakeProcess:
+        pid = 9876
+        returncode = None
+
+        def __init__(self):
+            self.terminated = False
+            self.killed = False
+            self.wait_calls = 0
+            self.release = asyncio.Event()
+
+        def terminate(self):
+            self.terminated = True
+            self.returncode = -15
+            self.release.set()
+
+        def kill(self):
+            self.killed = True
+            self.returncode = -9
+            self.release.set()
+
+        async def wait(self):
+            self.wait_calls += 1
+            wait_started.set()
+            await self.release.wait()
+            return self.returncode
+
+    process = FakeProcess()
+
+    async def fake_create_subprocess_exec(*args, **kwargs):
+        output_path.write_bytes(b"partial-video")
+        return process
+
+    async def run_and_cancel():
+        task = asyncio.create_task(
+            export.run_ffmpeg_export(job_id, "/tmp/audio.mp3", [], str(output_path))
+        )
+        await wait_started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    export.jobs[job_id] = {"status": "pending", "video_path": None}
+    monkeypatch.setattr(export, "build_ffmpeg_args", lambda *args: ["ffmpeg"])
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+
+    stderr_path = export.IMAGE_DIR / f"{job_id}_ffmpeg.stderr.log"
+    try:
+        asyncio.run(run_and_cancel())
+
+        assert process.terminated is True
+        assert process.wait_calls >= 2
+        assert job_id not in export.active_processes
+        assert export.jobs[job_id]["status"] == "cancelled"
+        assert not output_path.exists()
+        assert not stderr_path.exists()
+    finally:
+        _cleanup_job_metadata(job_id)
+        _cleanup_paths(output_path, stderr_path)

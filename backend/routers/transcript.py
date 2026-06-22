@@ -14,6 +14,7 @@ from youtube_transcript_api.proxies import GenericProxyConfig
 from agents import transcript_gate
 from config import (
     OPENAI_API_KEY,
+    VISUALANG_DATA_DIR,
     YT_DLP_DENO_PATH,
     YOUTUBE_PROXY_ENABLED,
     YOUTUBE_PROXY_HTTP_URL,
@@ -23,8 +24,8 @@ from config import (
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-IMAGE_DIR = Path("/tmp/visualang_images")
-IMAGE_DIR.mkdir(exist_ok=True)
+IMAGE_DIR = VISUALANG_DATA_DIR / "artifacts"
+IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 ALLOWED_UPLOAD_EXTENSIONS = {".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".wav", ".webm"}
 AUDIO_MEDIA_TYPES = {

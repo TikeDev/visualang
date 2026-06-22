@@ -1,6 +1,8 @@
 import asyncio
 import json
 import logging
+import subprocess
+import time
 import uuid
 import zipfile
 from pathlib import Path
@@ -10,19 +12,24 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from config import VISUALANG_DATA_DIR
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-IMAGE_DIR = Path("/tmp/visualang_images")
-IMAGE_DIR.mkdir(exist_ok=True)
+IMAGE_DIR = VISUALANG_DATA_DIR / "artifacts"
+IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 EXPORT_WIDTH = 1280
 EXPORT_HEIGHT = 720
-EXPORT_FPS = 30
+EXPORT_FPS = 24
 EXPORT_SCALE_WIDTH = 1436
 EXPORT_SCALE_HEIGHT = 808
 CROSSFADE_DURATION_SECONDS = 0.8
 DEFAULT_IMAGE_DURATION_SECONDS = 30.0
 MIN_SCENE_DURATION_SECONDS = 1 / EXPORT_FPS
+EXPORT_PROCESS_TIMEOUT_SECONDS = 14 * 60
+EXPORT_CANCEL_TIMEOUT_SECONDS = 2.0
+PROCESS_STARTED_AT = time.time()
 KEN_BURNS_VARIANTS = [
     {
         "name": "ken-burns-zoom-in-left",
@@ -55,7 +62,63 @@ KEN_BURNS_VARIANTS = [
 ]
 
 # In-memory job registry
-jobs: dict = {}
+jobs: dict[str, dict] = {}
+active_processes: dict[str, asyncio.subprocess.Process] = {}
+
+
+async def shutdown_process(process) -> None:
+    """Stop a child process cooperatively, escalating to kill after a grace period."""
+    if getattr(process, "returncode", None) is not None:
+        await process.wait()
+        return
+
+    try:
+        process.terminate()
+    except ProcessLookupError:
+        await process.wait()
+        return
+
+    try:
+        await asyncio.wait_for(
+            process.wait(), timeout=EXPORT_CANCEL_TIMEOUT_SECONDS
+        )
+    except asyncio.TimeoutError:
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
+        await process.wait()
+
+
+def remove_export_partials(
+    job_id: str,
+    *,
+    output_path: str | Path | None = None,
+    stderr_path: str | Path | None = None,
+) -> None:
+    job = jobs.get(job_id, {})
+    paths = (
+        output_path or job.get("output_path"),
+        stderr_path or job.get("stderr_path"),
+    )
+    for path in paths:
+        if path:
+            Path(path).unlink(missing_ok=True)
+
+
+async def cancel_export(job_id: str) -> bool:
+    process = active_processes.get(job_id)
+    if process is None:
+        return False
+
+    update_job(job_id, status="cancelled", error=None)
+    try:
+        await shutdown_process(process)
+        remove_export_partials(job_id)
+    finally:
+        if active_processes.get(job_id) is process:
+            active_processes.pop(job_id, None)
+    return True
 
 
 class ExportImage(BaseModel):
@@ -89,7 +152,54 @@ def persist_job(job_id: str) -> None:
 def update_job(job_id: str, **fields) -> dict:
     job = jobs.setdefault(job_id, {"status": "pending", "video_path": None})
     job.update(fields)
+    job["updated_at"] = time.time()
     persist_job(job_id)
+    return job
+
+
+def coerce_job_timestamp(value) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def read_text_tail(path: Path, max_bytes: int = 8000) -> str:
+    if not path.is_file():
+        return ""
+    with path.open("rb") as handle:
+        handle.seek(0, 2)
+        size = handle.tell()
+        handle.seek(max(size - max_bytes, 0))
+        return handle.read().decode("utf-8", errors="replace")
+
+
+def total_export_duration(images: list[dict]) -> float:
+    return sum(
+        normalize_scene_duration(img.get("duration_seconds", DEFAULT_IMAGE_DURATION_SECONDS))
+        for img in images
+    )
+
+
+def reconcile_export_job(job_id: str, job: dict) -> dict:
+    status = job.get("status")
+    if status not in {"pending", "running"}:
+        return job
+
+    output_path = job.get("video_path") or job.get("output_path")
+    if output_path and Path(output_path).is_file() and Path(output_path).stat().st_size > 0:
+        return update_job(job_id, status="done", video_path=output_path, error=None)
+
+    reference_time = coerce_job_timestamp(
+        job.get("started_at") or job.get("created_at") or job.get("updated_at")
+    )
+    if reference_time is None or reference_time < PROCESS_STARTED_AT:
+        return update_job(
+            job_id,
+            status="error",
+            error="Export was interrupted by a server restart. Retry export from the preview.",
+        )
+
     return job
 
 
@@ -112,7 +222,7 @@ def load_persisted_job(job_id: str) -> dict | None:
         return None
 
     jobs[job_id] = job
-    return job
+    return reconcile_export_job(job_id, job)
 
 
 def require_job(job_id: str) -> dict:
@@ -271,7 +381,18 @@ def build_ffmpeg_args(
     if not images:
         raise ValueError("At least one image is required for export")
 
-    ffmpeg_args = ["ffmpeg", "-y"]
+    ffmpeg_args = [
+        "ffmpeg",
+        "-y",
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-filter_threads",
+        "1",
+        "-filter_complex_threads",
+        "1",
+    ]
     for img in images:
         duration = normalize_scene_duration(
             img.get("duration_seconds", DEFAULT_IMAGE_DURATION_SECONDS)
@@ -303,17 +424,21 @@ def build_ffmpeg_args(
             "-c:v",
             "libx264",
             "-preset",
-            "fast",
+            "veryfast",
             "-crf",
             "23",
             "-pix_fmt",
             "yuv420p",
             "-r",
             str(fps),
+            "-threads",
+            "1",
             "-c:a",
             "aac",
             "-b:a",
             "192k",
+            "-movflags",
+            "+faststart",
             "-shortest",
             output_path,
         ]
@@ -322,28 +447,139 @@ def build_ffmpeg_args(
 
 
 async def run_ffmpeg_export(job_id: str, audio_path: str, images: list, output_path: str):
-    update_job(job_id, status="running")
+    export_started_at = time.time()
+    proc = None
+    expected_duration = total_export_duration(images)
+    update_job(
+        job_id,
+        status="running",
+        started_at=export_started_at,
+        output_path=output_path,
+        image_count=len(images),
+        expected_duration_seconds=expected_duration,
+    )
+    stderr_path = IMAGE_DIR / f"{job_id}_ffmpeg.stderr.log"
     try:
         ffmpeg_args = build_ffmpeg_args(audio_path, images, output_path)
-        logger.info(f"Running FFmpeg export for job {job_id}")
-        proc = await asyncio.create_subprocess_exec(
-            *ffmpeg_args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+        logger.info(
+            "Running FFmpeg export for job %s: images=%s expected_duration=%.3fs output=%s",
+            job_id,
+            len(images),
+            expected_duration,
+            output_path,
         )
-        _, stderr = await proc.communicate()
+        with stderr_path.open("wb") as stderr_file:
+            proc = await asyncio.create_subprocess_exec(
+                *ffmpeg_args,
+                stdout=subprocess.DEVNULL,
+                stderr=stderr_file,
+            )
+            active_processes[job_id] = proc
+            update_job(job_id, ffmpeg_pid=proc.pid, stderr_path=str(stderr_path))
+            logger.info(
+                "FFmpeg process started for job %s: pid=%s",
+                job_id,
+                proc.pid,
+            )
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=EXPORT_PROCESS_TIMEOUT_SECONDS)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+                elapsed = time.time() - export_started_at
+                if jobs.get(job_id, {}).get("status") == "cancelled":
+                    return
+                logger.error(
+                    "FFmpeg export timed out for job %s: pid=%s elapsed=%.3fs",
+                    job_id,
+                    proc.pid,
+                    elapsed,
+                )
+                update_job(
+                    job_id,
+                    status="error",
+                    error=(
+                        "FFmpeg export timed out. Retry export with fewer concepts "
+                        "or a shorter clip."
+                    ),
+                    stderr_path=str(stderr_path),
+                    returncode=proc.returncode,
+                    elapsed_seconds=elapsed,
+                )
+                return
+
+        elapsed = time.time() - export_started_at
+        if jobs.get(job_id, {}).get("status") == "cancelled":
+            return
         if proc.returncode != 0:
-            logger.error(f"FFmpeg failed for job {job_id}: {stderr.decode()}")
-            update_job(job_id, status="error", error=stderr.decode())
+            stderr_tail = read_text_tail(stderr_path)
+            logger.error(
+                "FFmpeg failed for job %s: pid=%s returncode=%s elapsed=%.3fs stderr=%s",
+                job_id,
+                proc.pid,
+                proc.returncode,
+                elapsed,
+                stderr_tail,
+            )
+            update_job(
+                job_id,
+                status="error",
+                error=stderr_tail or f"FFmpeg exited with code {proc.returncode}",
+                stderr_path=str(stderr_path),
+                returncode=proc.returncode,
+                elapsed_seconds=elapsed,
+            )
             return
 
         output_size = Path(output_path).stat().st_size
-        logger.info(f"FFmpeg export complete for job {job_id}: {output_size} bytes")
-        update_job(job_id, status="done", video_path=output_path)
+        if jobs.get(job_id, {}).get("status") == "cancelled":
+            return
+        logger.info(
+            "FFmpeg export complete for job %s: pid=%s returncode=%s elapsed=%.3fs "
+            "output_size=%s bytes",
+            job_id,
+            proc.pid,
+            proc.returncode,
+            elapsed,
+            output_size,
+        )
+        update_job(
+            job_id,
+            status="done",
+            video_path=output_path,
+            stderr_path=str(stderr_path),
+            returncode=proc.returncode,
+            elapsed_seconds=elapsed,
+            output_size_bytes=output_size,
+        )
 
+    except asyncio.CancelledError:
+        elapsed = time.time() - export_started_at
+        update_job(
+            job_id,
+            status="cancelled",
+            error="Export interrupted",
+            elapsed_seconds=elapsed,
+        )
+        if proc is not None:
+            await asyncio.shield(shutdown_process(proc))
+        remove_export_partials(
+            job_id, output_path=output_path, stderr_path=stderr_path
+        )
+        raise
     except Exception as e:
-        logger.error(f"Export failed for job {job_id}: {e}")
-        update_job(job_id, status="error", error=str(e))
+        elapsed = time.time() - export_started_at
+        logger.error(
+            "Export failed for job %s: elapsed=%.3fs error=%s",
+            job_id,
+            elapsed,
+            e,
+        )
+        if jobs.get(job_id, {}).get("status") != "cancelled":
+            update_job(job_id, status="error", error=str(e), elapsed_seconds=elapsed)
+    finally:
+        if active_processes.get(job_id) is proc:
+            active_processes.pop(job_id, None)
 
 
 @router.post("/export")
@@ -352,7 +588,14 @@ async def start_export(body: ExportRequest, background_tasks: BackgroundTasks):
     output_path = str(IMAGE_DIR / f"{job_id}.mp4")
 
     images_dicts = [img.model_dump() for img in body.images]
-    jobs[job_id] = {"status": "pending", "video_path": None}
+    now = time.time()
+    jobs[job_id] = {
+        "status": "pending",
+        "video_path": None,
+        "output_path": output_path,
+        "created_at": now,
+        "updated_at": now,
+    }
     persist_job(job_id)
 
     background_tasks.add_task(

@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import json
 import logging
@@ -24,18 +25,30 @@ from config import (
     NUNCHAKU_MODEL,
     NUNCHAKU_NEGATIVE_PROMPT,
     NUNCHAKU_TIER,
+    VISUALANG_DATA_DIR,
 )
 from routers import metrics
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-IMAGE_DIR = Path("/tmp/visualang_images")
-IMAGE_DIR.mkdir(exist_ok=True)
+IMAGE_DIR = VISUALANG_DATA_DIR / "artifacts"
+IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 _THROTTLE_LOCK = threading.Lock()
 _NEXT_NUNCHAKU_ATTEMPT_AT = 0.0
 MAX_NUNCHAKU_BACKOFF_SECONDS = 12.0
+
+
+class GenerationCancelled(Exception):
+    """Raised when cooperative image generation cancellation is requested."""
+
+
+def _raise_if_cancelled(cancel_event, filepath: str | None = None) -> None:
+    if cancel_event is not None and cancel_event.is_set():
+        if filepath is not None:
+            Path(filepath).unlink(missing_ok=True)
+        raise GenerationCancelled("Image generation cancelled")
 
 
 def _reserve_nunchaku_slot(now_fn=time.monotonic) -> float:
@@ -131,16 +144,26 @@ def generate_image(prompt: str, model: str = NUNCHAKU_MODEL, tier: str = NUNCHAK
     return {"filepath": filepath, "b64": b64_data}
 
 
-async def _generate_with_recovery(concept: dict) -> dict:
+def _generate_image_cancellable(prompt: str, cancel_event=None) -> dict:
+    result = generate_image(prompt)
+    _raise_if_cancelled(cancel_event, result["filepath"])
+    return result
+
+
+async def _generate_with_recovery(concept: dict, cancel_event=None) -> dict:
     """Generate one image serially. If vision post-check flags text, rewrite
     the prompt and retry once."""
     original_prompt = concept["image_prompt"]
     concept_name = concept["concept"]
 
-    result = await run_in_threadpool(generate_image, original_prompt)
+    _raise_if_cancelled(cancel_event)
+    result = await run_in_threadpool(
+        _generate_image_cancellable, original_prompt, cancel_event
+    )
     if not NUNCHAKU_ENABLE_REWRITE_RECOVERY:
         return {**result, "prompt_used": original_prompt}
 
+    _raise_if_cancelled(cancel_event, result["filepath"])
     try:
         check = await analyze_image_handler(image_b64=result["b64"])
     except Exception as e:
@@ -154,6 +177,7 @@ async def _generate_with_recovery(concept: dict) -> dict:
     logger.info("Image failed post-check for '%s' — rewriting prompt", concept_name)
     metrics.record("rewriter_triggered", 1)
 
+    _raise_if_cancelled(cancel_event, result["filepath"])
     try:
         rewrite = await image_rewriter.run(
             original_prompt=original_prompt,
@@ -164,41 +188,78 @@ async def _generate_with_recovery(concept: dict) -> dict:
         logger.warning("rewriter failed, returning original image: %s", e)
         return {**result, "prompt_used": original_prompt}
 
-    retry = await run_in_threadpool(generate_image, rewrite.revised_prompt)
+    _raise_if_cancelled(cancel_event, result["filepath"])
+    retry = await run_in_threadpool(
+        _generate_image_cancellable, rewrite.revised_prompt, cancel_event
+    )
     logger.info("Retry used revised prompt: %s", rewrite.reasoning[:80])
     return {**retry, "prompt_used": rewrite.revised_prompt}
 
 
+async def generate_images(concepts: list, cancel_event=None, on_progress=None) -> list[dict]:
+    total = len(concepts)
+    images = []
+    for index, concept in enumerate(concepts, start=1):
+        _raise_if_cancelled(cancel_event)
+        final = await _generate_with_recovery(concept, cancel_event=cancel_event)
+        image = {
+            "timestamp_seconds": concept["timestamp_seconds"],
+            "image_url": f"/images/{Path(final['filepath']).name}",
+        }
+        _raise_if_cancelled(cancel_event, final["filepath"])
+        images.append(image)
+        if on_progress is not None:
+            try:
+                _raise_if_cancelled(cancel_event, final["filepath"])
+            except GenerationCancelled:
+                images.pop()
+                raise
+            await on_progress(index, total, concept, image)
+    return images
+
+
 async def generate_images_stream(concepts: list):
     total = len(concepts)
-    results_by_index: dict[int, dict] = {}
     t0 = time.time()
+    progress_events = asyncio.Queue()
+    cancel_event = asyncio.Event()
+    generation_task = None
+
+    async def on_progress(index, progress_total, concept, image):
+        event = json.dumps({
+            "index": index,
+            "total": progress_total,
+            "image_url": image["image_url"],
+            "concept": concept["concept"],
+        })
+        progress_events.put_nowait(f"data: {event}\n\n")
 
     try:
-        for i, concept in enumerate(concepts):
-            logger.info(f"Generating image {i + 1}/{total}: '{concept['concept']}'")
-            final = await _generate_with_recovery(concept)
-            filename = Path(final["filepath"]).name
-            image_url = f"/images/{filename}"
-            results_by_index[i] = {
-                "timestamp_seconds": concept["timestamp_seconds"],
-                "image_url": image_url,
-            }
-            event = json.dumps({
-                "index": i + 1,
-                "total": total,
-                "image_url": image_url,
-                "concept": concept["concept"],
-            })
-            yield f"data: {event}\n\n"
-
-        ordered = [results_by_index[i] for i in range(total)]
+        generation_task = asyncio.create_task(
+            generate_images(
+                concepts,
+                cancel_event=cancel_event,
+                on_progress=on_progress,
+            )
+        )
+        while not generation_task.done() or not progress_events.empty():
+            try:
+                yield await asyncio.wait_for(progress_events.get(), timeout=0.05)
+            except asyncio.TimeoutError:
+                continue
+        ordered = await generation_task
         metrics.record("generate_batch_ms", int((time.time() - t0) * 1000))
         metrics.record("generate_batch_size", total)
         yield f"data: {json.dumps({'done': True, 'images': ordered})}\n\n"
     except Exception as e:
         logger.exception("Image generation stream failed")
         yield f"data: {json.dumps({'error': str(e)})}\n\n"
+    finally:
+        cancel_event.set()
+        if generation_task is not None:
+            if not generation_task.done():
+                generation_task.cancel()
+            await asyncio.gather(generation_task, return_exceptions=True)
 
 
 class GenerateRequest(BaseModel):
