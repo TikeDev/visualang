@@ -1,0 +1,196 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-21T21:57:29-04:00",
+  "title": "Design System: Visualang",
+  "extensions": {
+    "colorMeta": {
+      "burnt-clay": {
+        "role": "primary",
+        "displayName": "Burnt Clay",
+        "canonical": "#8f4d32",
+        "tonalRamp": ["oklch(15% 0.07 43)", "oklch(26% 0.08 43)", "oklch(38% 0.09 43)", "oklch(50% 0.10 43)", "oklch(62% 0.09 43)", "oklch(74% 0.07 43)", "oklch(86% 0.04 43)", "oklch(95% 0.02 43)"]
+      },
+      "soft-terracotta": {
+        "role": "primary",
+        "displayName": "Soft Terracotta",
+        "canonical": "#b96e4d",
+        "tonalRamp": ["oklch(15% 0.07 45)", "oklch(26% 0.08 45)", "oklch(38% 0.09 45)", "oklch(50% 0.10 45)", "oklch(62% 0.10 45)", "oklch(74% 0.08 45)", "oklch(86% 0.05 45)", "oklch(95% 0.02 45)"]
+      },
+      "library-sage": {
+        "role": "secondary",
+        "displayName": "Library Sage",
+        "canonical": "#54734f",
+        "tonalRamp": ["oklch(15% 0.04 137)", "oklch(26% 0.05 137)", "oklch(38% 0.06 137)", "oklch(50% 0.07 137)", "oklch(62% 0.06 137)", "oklch(74% 0.05 137)", "oklch(86% 0.03 137)", "oklch(95% 0.015 137)"]
+      },
+      "soft-sage": {
+        "role": "secondary",
+        "displayName": "Soft Sage",
+        "canonical": "#7d9b75",
+        "tonalRamp": ["oklch(15% 0.04 137)", "oklch(26% 0.05 137)", "oklch(38% 0.06 137)", "oklch(50% 0.07 137)", "oklch(62% 0.07 137)", "oklch(74% 0.06 137)", "oklch(86% 0.035 137)", "oklch(95% 0.015 137)"]
+      },
+      "studio-canvas": {
+        "role": "neutral",
+        "displayName": "Studio Canvas",
+        "canonical": "#f5f0e8",
+        "tonalRamp": ["oklch(15% 0.012 75)", "oklch(26% 0.012 75)", "oklch(38% 0.012 75)", "oklch(50% 0.012 75)", "oklch(62% 0.012 75)", "oklch(74% 0.012 75)", "oklch(86% 0.012 75)", "oklch(95% 0.012 75)"]
+      },
+      "warm-paper": {
+        "role": "neutral",
+        "displayName": "Warm Paper",
+        "canonical": "#fffaf4",
+        "tonalRamp": ["oklch(15% 0.008 62)", "oklch(26% 0.008 62)", "oklch(38% 0.008 62)", "oklch(50% 0.008 62)", "oklch(62% 0.008 62)", "oklch(74% 0.008 62)", "oklch(86% 0.008 62)", "oklch(95% 0.008 62)"]
+      },
+      "ink-brown": {
+        "role": "neutral",
+        "displayName": "Ink Brown",
+        "canonical": "#251d14",
+        "tonalRamp": ["oklch(15% 0.02 60)", "oklch(26% 0.02 60)", "oklch(38% 0.02 60)", "oklch(50% 0.02 60)", "oklch(62% 0.018 60)", "oklch(74% 0.014 60)", "oklch(86% 0.01 60)", "oklch(95% 0.006 60)"]
+      },
+      "secondary-ink": {
+        "role": "neutral",
+        "displayName": "Secondary Ink",
+        "canonical": "#5c4738",
+        "tonalRamp": ["oklch(15% 0.025 55)", "oklch(26% 0.03 55)", "oklch(38% 0.035 55)", "oklch(50% 0.035 55)", "oklch(62% 0.03 55)", "oklch(74% 0.022 55)", "oklch(86% 0.014 55)", "oklch(95% 0.007 55)"]
+      },
+      "night-studio": {
+        "role": "neutral",
+        "displayName": "Night Studio",
+        "canonical": "#16110d",
+        "tonalRamp": ["oklch(15% 0.012 55)", "oklch(26% 0.012 55)", "oklch(38% 0.012 55)", "oklch(50% 0.012 55)", "oklch(62% 0.01 55)", "oklch(74% 0.008 55)", "oklch(86% 0.006 55)", "oklch(95% 0.004 55)"]
+      },
+      "night-paper": {
+        "role": "neutral",
+        "displayName": "Night Paper",
+        "canonical": "#2d231c",
+        "tonalRamp": ["oklch(15% 0.016 55)", "oklch(26% 0.018 55)", "oklch(38% 0.018 55)", "oklch(50% 0.016 55)", "oklch(62% 0.014 55)", "oklch(74% 0.01 55)", "oklch(86% 0.007 55)", "oklch(95% 0.004 55)"]
+      },
+      "night-ink": {
+        "role": "neutral",
+        "displayName": "Night Ink",
+        "canonical": "#f4eadf",
+        "tonalRamp": ["oklch(15% 0.012 62)", "oklch(26% 0.012 62)", "oklch(38% 0.012 62)", "oklch(50% 0.012 62)", "oklch(62% 0.012 62)", "oklch(74% 0.012 62)", "oklch(86% 0.012 62)", "oklch(95% 0.012 62)"]
+      },
+      "signal-red": {
+        "role": "error",
+        "displayName": "Signal Red",
+        "canonical": "#8b2b2b",
+        "tonalRamp": ["oklch(15% 0.08 25)", "oklch(26% 0.11 25)", "oklch(38% 0.14 25)", "oklch(50% 0.16 25)", "oklch(62% 0.14 25)", "oklch(74% 0.10 25)", "oklch(86% 0.06 25)", "oklch(95% 0.025 25)"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Stage Display", "purpose": "One primary workflow heading per view." },
+      "headline": { "displayName": "Lesson Headline", "purpose": "Lesson titles and preview context." },
+      "title": { "displayName": "Workflow Title", "purpose": "Steps and compact section names." },
+      "body": { "displayName": "Reading Body", "purpose": "Instructions, help, progress, and status." },
+      "label": { "displayName": "Control Label", "purpose": "Buttons, fields, selectors, and compact controls." }
+    },
+    "shadows": [
+      { "name": "panel-ambient", "value": "0 24px 60px -32px var(--color-shadow)", "purpose": "Separates the principal workflow stage from the page." },
+      { "name": "control-lift", "value": "0 10px 20px -14px rgba(37, 29, 20, 0.45)", "purpose": "Brief hover feedback on actionable buttons." },
+      { "name": "preview-vignette", "value": "inset 0 0 160px rgba(15, 10, 7, 0.45)", "purpose": "Preserves control contrast over generated imagery." }
+    ],
+    "motion": [
+      { "name": "control-feedback", "value": "150ms ease", "purpose": "Hover and active-state feedback." },
+      { "name": "scene-fade", "value": "800ms ease-in-out", "purpose": "Crossfades illustrated scenes in the preview." },
+      { "name": "ken-burns", "value": "linear; duration follows scene", "purpose": "Slow image motion during playback only; disabled for reduced motion." }
+    ],
+    "breakpoints": [
+      { "name": "stack-layout", "value": "56rem" },
+      { "name": "mobile-controls", "value": "42rem" },
+      { "name": "short-viewport", "value": "44rem height" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single current action in the workflow.",
+      "html": "<button class=\"ds-button-primary\">Generate illustrated preview</button>",
+      "css": ".ds-button-primary { min-height: 52px; padding: 13.6px 20px; border: 1px solid transparent; border-radius: 999px; background: var(--color-terracotta-accessible, #8f4d32); color: #fffaf4; font: 700 16px/1.2 'Source Serif 4', Georgia, serif; transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease; } .ds-button-primary:hover { transform: translateY(-1px); box-shadow: 0 10px 20px -14px rgba(37,29,20,.45); } .ds-button-primary:focus-visible { outline: 3px solid var(--color-focus-ring, #8f4d32); outline-offset: 3px; } .ds-button-primary:active { transform: translateY(0); } .ds-button-primary:disabled { background: #d0bcaa; color: #5f5347; box-shadow: none; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "A supporting action that does not compete with the primary step.",
+      "html": "<button class=\"ds-button-secondary\">Start over</button>",
+      "css": ".ds-button-secondary { min-height: 52px; padding: 13.6px 20px; border: 1px solid var(--color-border-subtle, rgba(82,58,40,.18)); border-radius: 999px; background: var(--color-surface-elevated, #fffaf4); color: var(--color-text-primary, #251d14); font: 700 16px/1.2 'Source Serif 4', Georgia, serif; transition: transform 150ms ease, border-color 150ms ease; } .ds-button-secondary:hover { transform: translateY(-1px); border-color: var(--color-border-emphasis, rgba(143,77,50,.32)); } .ds-button-secondary:focus-visible { outline: 3px solid var(--color-focus-ring, #8f4d32); outline-offset: 3px; } .ds-button-secondary:active { transform: translateY(0); }"
+    },
+    {
+      "name": "Source Mode Control",
+      "kind": "custom",
+      "description": "Selects YouTube URL or audio upload with an explicit active state.",
+      "html": "<div class=\"ds-source-mode\" role=\"group\" aria-label=\"Choose your source\"><button class=\"ds-source-option is-active\">YouTube URL</button><button class=\"ds-source-option\">Audio upload</button></div>",
+      "css": ".ds-source-mode { display: flex; flex-wrap: wrap; gap: 12px; } .ds-source-option { min-height: 52px; padding: 12.8px 16px; border: 1px solid var(--color-border, rgba(82,58,40,.16)); border-radius: 16px; background: var(--color-surface-elevated, #fffaf4); color: var(--color-text-primary, #251d14); font: 600 16px/1.2 'Source Serif 4', Georgia, serif; transition: transform 150ms ease, border-color 150ms ease, background 150ms ease; } .ds-source-option:hover { transform: translateY(-1px); border-color: var(--color-border-emphasis, rgba(143,77,50,.32)); } .ds-source-option:focus-visible { outline: 3px solid var(--color-focus-ring, #8f4d32); outline-offset: 3px; } .ds-source-option.is-active { background: var(--color-control-active-bg, #8f4d32); color: var(--color-control-active-text, #fffaf4); border-color: var(--color-control-active-bg, #8f4d32); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "text-field",
+      "description": "A large, readable source field with an explicit focus ring.",
+      "html": "<label class=\"ds-field-label\" for=\"ds-source\">YouTube URL</label><input class=\"ds-text-field\" id=\"ds-source\" placeholder=\"https://youtube.com/watch?v=…\">",
+      "css": ".ds-field-label { display: block; margin-bottom: 11px; color: var(--color-text-primary, #251d14); font: 700 16px/1.2 'Source Serif 4', Georgia, serif; } .ds-text-field { width: 100%; min-height: 54px; padding: 14.4px 16px; border: 1px solid var(--color-border-strong, rgba(92,71,56,.22)); border-radius: 16px; background: var(--color-field-bg, #fffaf4); color: var(--color-text-primary, #251d14); font: 400 16px/1.6 'Source Serif 4', Georgia, serif; } .ds-text-field::placeholder { color: var(--color-text-muted, #7b6656); opacity: 1; } .ds-text-field:hover { border-color: var(--color-border-emphasis, rgba(143,77,50,.32)); } .ds-text-field:focus-visible { outline: 3px solid var(--color-focus-ring, #8f4d32); outline-offset: 3px; }"
+    },
+    {
+      "name": "Status Notice",
+      "kind": "custom",
+      "description": "A compact tonal message that combines color with explicit text.",
+      "html": "<div class=\"ds-notice-success\" role=\"status\"><strong>Export complete.</strong><span>Your lesson video is ready to download.</span></div>",
+      "css": ".ds-notice-success { display: flex; align-items: flex-start; gap: 10px; padding: 16px 18px; border: 1px solid rgba(82,58,40,.12); border-radius: 16px; background: #e3efe2; color: #251d14; font: 400 16px/1.5 'Source Serif 4', Georgia, serif; } .ds-notice-success strong { font-weight: 700; } .ds-notice-success:focus-visible { outline: 3px solid #8f4d32; outline-offset: 3px; }"
+    },
+    {
+      "name": "Workflow Panel",
+      "kind": "card",
+      "refersTo": "content-panel",
+      "description": "The principal stage container; internal content stays flat.",
+      "html": "<section class=\"ds-workflow-panel\"><h2>Build your illustrated lesson</h2><p>Add a source, follow progress, then review and export.</p></section>",
+      "css": ".ds-workflow-panel { max-width: 1152px; padding: clamp(20px,3vw,40px); border: 1px solid var(--color-border, rgba(82,58,40,.16)); border-radius: 24px; background: var(--color-paper, #fffaf4); color: var(--color-text-primary, #251d14); box-shadow: 0 24px 60px -32px var(--color-shadow, rgba(37,29,20,.12)); } .ds-workflow-panel h2 { margin: 0 0 16px; font: 600 clamp(32px,3.8vw,55px)/1.05 'Playfair Display', Georgia, serif; text-wrap: balance; } .ds-workflow-panel p { max-width: 70ch; margin: 0; color: var(--color-text-secondary, #5c4738); font: 400 16px/1.6 'Source Serif 4', Georgia, serif; } .ds-workflow-panel:focus-within { border-color: var(--color-border-emphasis, rgba(143,77,50,.32)); }"
+    },
+    {
+      "name": "Illustrated Preview Controls",
+      "kind": "custom",
+      "description": "Restrained media chrome over the lower edge of generated imagery.",
+      "html": "<div class=\"ds-preview\"><div class=\"ds-preview-image\"></div><div class=\"ds-preview-controls\"><button aria-label=\"Play narration\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"currentColor\"><path d=\"M8 5.5v13l10-6.5L8 5.5Z\"/></svg></button><span>Lesson title</span><input type=\"range\" aria-label=\"Seek\"><span>1:24 / 4:10</span></div></div>",
+      "css": ".ds-preview { position: relative; overflow: hidden; aspect-ratio: 16/9; border-radius: 24px; background: #1d1711; } .ds-preview-image { position: absolute; inset: 0; background: linear-gradient(135deg,#7d9b75,#b96e4d); } .ds-preview-controls { position: absolute; inset: auto 0 0; display: grid; grid-template-columns: auto minmax(100px,1fr) minmax(120px,2fr) auto; align-items: center; gap: 16px; padding: 20px; background: linear-gradient(to top,rgba(25,18,12,.88),rgba(25,18,12,.12)); color: #fffaf4; font: 400 16px/1.35 'Source Serif 4', Georgia, serif; } .ds-preview-controls button { width: 56px; height: 56px; border: 1px solid rgba(255,250,244,.44); border-radius: 999px; background: rgba(255,250,244,.18); color: #fffaf4; } .ds-preview-controls button:hover { background: rgba(255,250,244,.26); } .ds-preview-controls button:focus-visible, .ds-preview-controls input:focus-visible { outline: 3px solid #f3c680; outline-offset: 3px; } .ds-preview-controls input { width: 100%; accent-color: #f3c680; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Illustrated Lesson Studio",
+    "overview": "Visualang is a focused workspace that turns spoken material into a finished learning artifact. The interface should feel cinematic only when imagery is the subject: the generated preview receives the largest visual field, while source input, progress, export, and download controls remain structured and quiet. This is a product workflow, not a film-marketing page.\n\nThe visual language pairs editorial serif type with a restrained clay-and-sage palette. Warmth comes from the imagery, type, and accents rather than from decorative effects. Controls use familiar affordances, status remains legible during long waits, and the interface becomes denser or simpler according to the current stage instead of presenting every function at once.\n\nThe system explicitly rejects generic AI startup styling, chatbot framing, prompt playgrounds, token dashboards, cosmic decoration, and empty SaaS hero compositions. Craft must serve the learning workflow and the exported video.",
+    "keyCharacteristics": [
+      "Image-led preview with restrained surrounding chrome",
+      "Editorial warmth paired with product-level interaction clarity",
+      "One continuous source-to-download workflow",
+      "Strong status communication without dashboard noise",
+      "Light and dark themes that preserve the same semantic hierarchy"
+    ],
+    "rules": [
+      { "name": "The One Action Color Rule", "body": "Burnt Clay identifies primary action, current selection, and focus. It is not page decoration.", "section": "colors" },
+      { "name": "The Preview Owns the Color Rule", "body": "Generated artwork may be visually rich; surrounding controls stay neutral enough that the lesson remains dominant.", "section": "colors" },
+      { "name": "The Semantic Pairing Rule", "body": "Error, warning, information, and success states always combine text or iconography with color. Color alone never carries status.", "section": "colors" },
+      { "name": "The One Editorial Moment Rule", "body": "Playfair is reserved for the current stage heading or lesson title. Controls, labels, data, and status always use Source Serif 4.", "section": "typography" },
+      { "name": "The Plain Status Rule", "body": "Progress and error language is concise sentence case. Tracked uppercase text is not a default section scaffold.", "section": "typography" },
+      { "name": "The Flat Workflow Rule", "body": "Source, progress, and download structures use tonal contrast and dividers first. Shadows are reserved for the primary stage and interaction feedback.", "section": "elevation" },
+      { "name": "The No Nested Glass Rule", "body": "Never place translucent blurred cards inside another elevated or blurred panel.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do make the generated preview the largest visual element once imagery is available.",
+      "Do preserve the source, processing, preview, export, and download sequence as one legible workflow.",
+      "Do use Burnt Clay for the single current primary action and Library Sage for completion.",
+      "Do keep body copy near 70 characters per line and maintain WCAG 2.2 AA contrast.",
+      "Do provide visible focus, keyboard operation, text-plus-color status, and reduced-motion behavior.",
+      "Do let dark media controls overlay the preview while keeping ordinary product surfaces mostly flat and tonal."
+    ],
+    "donts": [
+      "Don't use generic AI startup interfaces built around purple gradients, cosmic glows, sparkles, or “magic” language.",
+      "Don't use chatbot, prompt-playground, agent-dashboard, or token-pill interaction models.",
+      "Don't use floating glass cards, empty center-column SaaS heroes, or decorative metrics that obscure the workflow.",
+      "Don't use generic content-generation framing that makes language learning or the exported video feel secondary.",
+      "Don't use noisy progress messaging, low-contrast controls, or motion that competes with the user’s task.",
+      "Don't copy a film-marketing landing page: no full-screen background video, giant slogan, or form floating over unpredictable imagery.",
+      "Don't use colored side-stripe borders, gradient text, nested cards, or border-plus-wide-shadow decoration.",
+      "Don't use Playfair Display for buttons, labels, playback data, or status messages."
+    ]
+  }
+}
