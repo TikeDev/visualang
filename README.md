@@ -106,13 +106,18 @@ Keep all env files local only. `.env`, `.env.local`, `frontend/.env`, and `backe
 
 ### Backend: `backend/.env`
 
-The backend currently expects these variables:
+The backend requires these variables:
 
 ```bash
 ANTHROPIC_API_KEY=your_anthropic_key
 OPENAI_API_KEY=your_openai_key
 NUNCHAKU_API_KEY=sk-nunchaku-...
 CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+```
+
+These variables are optional overrides. You can omit them locally and in Render unless you need the specific behavior described below.
+
+```bash
 YOUTUBE_PROXY_ENABLED=false
 YOUTUBE_PROXY_HTTP_URL=
 YOUTUBE_PROXY_HTTPS_URL=
@@ -130,7 +135,7 @@ Notes:
 - Set `YOUTUBE_PROXY_ENABLED=true` and configure `YOUTUBE_PROXY_HTTP_URL` and/or `YOUTUBE_PROXY_HTTPS_URL` when you want hosted YouTube transcript fetches and `yt-dlp` requests to run through a proxy.
 - If only one proxy URL is provided, the backend reuses it for both transcript fetches and `yt-dlp` requests.
 - `YT_DLP_DENO_PATH` is optional. Leave it empty when `deno` is already on `PATH`; set it to the Deno executable path if the backend process cannot find Deno.
-- The Nunchaku retry and throttle settings control spacing and backoff around image generation requests.
+- The Nunchaku retry and throttle settings have built-in defaults: 2 seconds between attempts, 4 rate-limit retries, 3 seconds base backoff, and rewrite recovery disabled.
 - Generated images and uploaded audio are stored under `/tmp/visualang_images`.
 
 ### Frontend: `frontend/.env`

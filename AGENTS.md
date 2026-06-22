@@ -56,6 +56,14 @@ pytest tests/test_generate.py -v
 pytest tests/test_export.py -v
 ```
 
+## Render CLI and Skills
+
+- Use the `render-cli` skill when a task involves Render CLI setup, auth, deploys, logs, SSH, `psql`, Blueprint validation, or CI/CD automation.
+- Useful related skills: `render-deploy`, `render-blueprints`, `render-web-services`, `render-env-vars`, `render-postgres`, `render-debug`, and `render-static-sites`.
+- The Render CLI supports `render login`, `render workspace set`, `render services -o json`, `render deploys create <service-id> --wait --confirm -o json`, `render logs -r <service-id> --tail`, `render psql <db-id>`, `render ssh <service-id> --ephemeral`, and `render blueprints validate`.
+- For scripts or CI, prefer `RENDER_API_KEY`, `--confirm`, and `-o json`; never print or commit API keys.
+- `render skills install`, `render skills update`, and `render skills list` manage Render agent skills for supported AI coding tools.
+
 ## Environment
 
 - Backend expects `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and `NUNCHAKU_API_KEY` in `backend/.env`.

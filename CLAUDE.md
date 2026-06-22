@@ -29,6 +29,14 @@ pytest tests/test_generate.py -v
 pytest tests/test_export.py -v
 ```
 
+## Render CLI and Skills
+
+- Use the `render-cli` skill for Render CLI installation, authentication, deploys, logs, SSH, `psql`, Blueprint validation, and CI/CD scripting.
+- Reach for related Render skills by task: `render-deploy`, `render-blueprints`, `render-web-services`, `render-env-vars`, `render-postgres`, `render-debug`, and `render-static-sites`.
+- Common commands: `render login`, `render workspace set`, `render services -o json`, `render deploys create <service-id> --wait --confirm -o json`, `render logs -r <service-id> --tail`, `render psql <db-id>`, `render ssh <service-id> --ephemeral`, and `render blueprints validate`.
+- In non-interactive workflows, use `RENDER_API_KEY`, `--confirm`, and `-o json`. Never print or commit Render API keys.
+- Render skills can be managed with `render skills install`, `render skills update`, and `render skills list`.
+
 ## Architecture
 
 - `frontend/src/App.jsx` orchestrates transcript fetch, concept extraction, image generation, preview, and export polling.
