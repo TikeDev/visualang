@@ -53,7 +53,12 @@ pnpm build
 # Run tests
 pytest tests/test_visualang_phase2.py -v
 pytest tests/test_generate.py -v
+pytest tests/test_image_providers.py -v
 pytest tests/test_export.py -v
+
+# Frontend tests (Vitest)
+cd frontend
+pnpm test
 ```
 
 ## Render CLI and Skills
@@ -66,17 +71,18 @@ pytest tests/test_export.py -v
 
 ## Environment
 
-- Backend expects `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and `NUNCHAKU_API_KEY` in `backend/.env`.
+- Backend expects `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_API_TOKEN` in `backend/.env`. Nunchaku credentials are fallback-only (`IMAGE_PROVIDER=nunchaku`).
 - Frontend uses `VITE_API_URL` and defaults to `http://localhost:8000`.
-- Generated backend image assets are served from `/tmp/visualang_images` at `/images/*`.
+- Generated backend assets (jobs, images) are served from `VISUALANG_DATA_DIR` (defaults to `/tmp/visualang_data`); images are exposed at `/images/*`.
 
 ## Architecture Summary
 
 ### Frontend
 
-- Stack: React 19 + Vite.
+- Stack: React 19 + Vite, Vitest for tests.
 - Entry files: `frontend/src/main.jsx`, `frontend/src/App.jsx`.
-- `frontend/src/App.jsx` orchestrates transcript fetch, concept extraction, SSE image generation, preview, and export polling.
+- `frontend/src/App.jsx` orchestrates the job lifecycle: create job, poll/resume via `frontend/src/jobApi.js`, render progress via `frontend/src/components/JobProgress.jsx` (driven by the pure state mapper in `frontend/src/jobState.js`), preview, and download.
+- The resume token for an in-flight or completed job lives in the URL hash (`#/jobs/<token>`) so a job survives reload or sharing the link.
 - `frontend/src/config.js` holds the backend base URL.
 
 ### Backend
@@ -84,13 +90,14 @@ pytest tests/test_export.py -v
 - Stack: FastAPI.
 - Entry file: `backend/main.py`.
 - Routers:
-  - `backend/routers/transcript.py`
-  - `backend/routers/concepts.py`
-  - `backend/routers/generate.py`
-  - `backend/routers/export.py`
-  - `backend/routers/metrics.py`
-  - `backend/routers/demo.py`
-- Health check: `GET /health`
+  - `backend/routers/jobs.py` — job-based pipeline API (current model): create/get/cancel/retry/delete + video/transcript/images downloads, all gated by a resume token.
+  - `backend/routers/transcript.py`, `concepts.py`, `generate.py`, `export.py` — underlying per-stage logic, also reachable directly (used by tests and the job runner's injected stage functions).
+  - `backend/routers/metrics.py` — rolling latency percentiles, in-memory.
+  - `backend/routers/demo.py` — serves seeded fixtures from `backend/scripts/seed_demo.py`.
+- `backend/job_store.py` (`JobStore`, SQLite-backed) and `backend/job_runner.py` (`JobRunner`, stage state machine) implement the resumable job model. See [`CLAUDE.md`](CLAUDE.md) for the full job lifecycle and the resume-token security model.
+- `backend/image_providers.py` abstracts Cloudflare Workers AI vs. Nunchaku behind `call_cloudflare`/`call_nunchaku`; `IMAGE_PROVIDER` selects which one `generate.py` calls.
+- `backend/config.py` is the single source of truth for env-driven settings — add new env vars there.
+- Health check: `GET /health`.
 
 ### Runtime Agents
 
@@ -104,13 +111,16 @@ pytest tests/test_export.py -v
 
 - `tests/test_visualang_phase2.py` covers orchestration flow.
 - `tests/test_generate.py` covers generation router behavior.
+- `tests/test_image_providers.py` covers the Cloudflare/Nunchaku provider abstraction.
 - `tests/test_export.py` covers export packaging behavior.
+- `frontend/src/jobState.test.js`, `frontend/src/jobApi.test.js`, `frontend/src/components/JobProgress.test.jsx` cover the frontend job lifecycle.
 
 ## Working Conventions
 
 - Prefer focused edits over broad rewrites; preserve the current frontend/backend split.
 - Treat `backend/.env` as local-only. Never print or copy real secrets into docs, fixtures, or commit messages.
 - Shared behavior should usually be coordinated through API contracts, not duplicated logic.
+- When changing job semantics, update `STAGE_ORDER` in `job_runner.py`, the status handling in `frontend/src/jobState.js`, and `_PRIVATE_FIELDS` in `routers/jobs.py` together — they encode the same state machine from three angles.
 - When changing the generation pipeline, check both `frontend/src/App.jsx` and the corresponding backend router payloads.
 - When changing backend agents, also consult `backend/AGENTS.md` before editing prompts, tool wiring, or model selection.
 

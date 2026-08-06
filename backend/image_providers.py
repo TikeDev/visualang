@@ -9,8 +9,6 @@ from dataclasses import dataclass
 
 import requests
 
-logger = logging.getLogger(__name__)
-
 from config import (
     CLOUDFLARE_ACCOUNT_ID,
     CLOUDFLARE_API_TOKEN,
@@ -28,6 +26,7 @@ from config import (
     NUNCHAKU_TIER,
 )
 
+logger = logging.getLogger(__name__)
 
 MAX_BACKOFF_SECONDS = 12.0
 _NUNCHAKU_THROTTLE_LOCK = threading.Lock()

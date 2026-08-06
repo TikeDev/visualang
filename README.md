@@ -13,6 +13,7 @@ On the deployed app, YouTube ingestion may fail because hosted environments like
 - Extracts visual concepts with backend runtime agents.
 - Streams image generation progress from the backend to the frontend.
 - Previews synced audio + illustrated scenes in the browser player.
+- Runs the whole pipeline as a single resumable job, with a shareable resume link so a run can survive a reload or be picked up from another tab.
 - Starts an FFmpeg export job in the background and exposes video, transcript, and image downloads.
 - Supports seeded demo fixtures and lightweight in-memory metrics for demos.
 
@@ -111,7 +112,8 @@ The backend requires these variables:
 ```bash
 ANTHROPIC_API_KEY=your_anthropic_key
 OPENAI_API_KEY=your_openai_key
-NUNCHAKU_API_KEY=sk-nunchaku-...
+CLOUDFLARE_ACCOUNT_ID=your_cloudflare_account_id
+CLOUDFLARE_API_TOKEN=your_cloudflare_api_token
 CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 ```
 
@@ -122,10 +124,11 @@ YOUTUBE_PROXY_ENABLED=false
 YOUTUBE_PROXY_HTTP_URL=
 YOUTUBE_PROXY_HTTPS_URL=
 YT_DLP_DENO_PATH=
-NUNCHAKU_MIN_INTERVAL_SECONDS=2.0
-NUNCHAKU_MAX_429_RETRIES=4
-NUNCHAKU_BACKOFF_BASE_SECONDS=3.0
-NUNCHAKU_ENABLE_REWRITE_RECOVERY=false
+IMAGE_PROVIDER=cloudflare
+IMAGE_GENERATION_CONCURRENCY=4
+IMAGE_ENABLE_REWRITE_RECOVERY=false
+CLOUDFLARE_MAX_RETRIES=4
+CLOUDFLARE_BACKOFF_BASE_SECONDS=1.0
 ```
 
 Notes:
@@ -135,7 +138,10 @@ Notes:
 - Set `YOUTUBE_PROXY_ENABLED=true` and configure `YOUTUBE_PROXY_HTTP_URL` and/or `YOUTUBE_PROXY_HTTPS_URL` when you want hosted YouTube transcript fetches and `yt-dlp` requests to run through a proxy.
 - If only one proxy URL is provided, the backend reuses it for both transcript fetches and `yt-dlp` requests.
 - `YT_DLP_DENO_PATH` is optional. Leave it empty when `deno` is already on `PATH`; set it to the Deno executable path if the backend process cannot find Deno.
-- The Nunchaku retry and throttle settings have built-in defaults: 2 seconds between attempts, 4 rate-limit retries, 3 seconds base backoff, and rewrite recovery disabled.
+- Cloudflare Workers AI is the default image provider and requires an account ID plus a token with Workers AI Read and Edit permissions.
+- `IMAGE_GENERATION_CONCURRENCY` defaults to 4. Progress streams as images finish; the final list stays in transcript order.
+- Cloudflare includes a daily free Workers AI allocation. Usage beyond it requires Cloudflare's paid Workers plan.
+- Nunchaku support still exists in code (`IMAGE_PROVIDER=nunchaku`) but the Nunchaku API is not currently available — do not treat it as a working fallback; Cloudflare is the only supported provider for now.
 - Generated images and uploaded audio are stored under `/tmp/visualang_images`.
 
 ### Frontend: `frontend/.env`
@@ -148,20 +154,16 @@ If omitted, the frontend falls back to `http://localhost:8000`.
 
 ## How The Pipeline Works
 
-1. `POST /transcript`
-   Accepts either JSON with a YouTube video or Shorts URL, or multipart upload with an audio file. YouTube first tries `youtube-transcript-api`, then falls back to `yt-dlp` + OpenAI transcription when captions are unavailable or fail to load; local uploads use OpenAI transcription directly.
-2. Transcript gate
-   `TranscriptGate` evaluates whether the transcript is usable before the rest of the pipeline runs.
-3. `POST /concepts`
-   `ConceptExtractor` turns transcript segments into visual moments with image prompts.
-4. `POST /generate`
-   The backend generates images serially through Nunchaku and streams progress back over server-sent events.
-5. Browser preview
-   The React player preloads generated images, syncs them to audio, and applies Ken Burns style motion and fades.
-6. `POST /export`
-   The backend starts an FFmpeg export job, then the frontend polls for completion and exposes download links for the final video, transcript, and image zip.
-7. Demo + observability helpers
-   Seeded demos are served from `/demo/*`, and rolling in-memory stats are exposed from `/metrics`.
+The backend runs the whole pipeline as a single resumable **job** that moves through four stages: transcript → concepts → image generation → export.
+
+- `POST /jobs` (YouTube URL) or `POST /jobs/upload` (audio file) starts a job and returns a `resume_token` used for every other job call.
+- The frontend polls `GET /jobs/{resume_token}` and keeps the token in the URL hash, so a job survives a reload or can be resumed from a shared link.
+- `POST /jobs/{resume_token}/retry` resumes from the last completed stage; `/cancel` stops it; `DELETE` removes it. Jobs auto-expire after `JOB_RETENTION_SECONDS`.
+- `GET /jobs/{resume_token}/video`, `/transcript`, and `/images` serve the finished outputs.
+
+The older single-shot `/transcript`, `/concepts`, `/generate`, and `/export` endpoints still exist (the job pipeline calls into them internally, and tests use them directly), but the job API above is the primary flow.
+
+See [backend/job_runner.py](backend/job_runner.py) and [backend/routers/jobs.py](backend/routers/jobs.py) for stage and endpoint details.
 
 ## Contributor Notes
 

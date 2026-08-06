@@ -1,6 +1,7 @@
 import asyncio
 import os
 import sys
+import threading
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,7 +20,7 @@ YOUTUBE_SOURCE = {"kind": "youtube", "url": "https://example.test/video"}
 
 
 def fake_transcript_fn(calls, transcript=None):
-    async def run(source):
+    async def run(source, *, cancel_event=None):
         calls.append("transcript")
         return transcript or [{"text": "hola", "start": 0, "duration": 1}]
 
@@ -135,6 +136,47 @@ def test_cancel_preserves_completed_artifacts(tmp_path):
     assert job["transcript"] == [{"text": "hola", "start": 0, "duration": 1}]
 
 
+def test_runner_passes_cancel_event_to_transcript_fn(tmp_path):
+    store = JobStore(tmp_path)
+    access = store.create_job(YOUTUBE_SOURCE)
+    calls = []
+    captured = {}
+
+    async def transcript_fn(source, *, cancel_event=None):
+        captured["cancel_event"] = cancel_event
+        return [{"text": "hola", "start": 0, "duration": 1}]
+
+    runner = make_runner(store, calls, transcript_fn=transcript_fn)
+
+    asyncio.run(runner.run(access.job_id))
+
+    assert isinstance(captured["cancel_event"], threading.Event)
+
+
+def test_cancel_during_transcript_stage_marks_job_cancelled(tmp_path):
+    store = JobStore(tmp_path)
+    access = store.create_job(YOUTUBE_SOURCE)
+    calls = []
+
+    async def main():
+        started = asyncio.Event()
+
+        async def transcript_fn(source, *, cancel_event=None):
+            started.set()
+            await asyncio.Event().wait()
+
+        runner = make_runner(store, calls, transcript_fn=transcript_fn)
+        asyncio.ensure_future(runner.run(access.job_id))
+        await started.wait()
+        await runner.cancel(access.job_id)
+
+    asyncio.run(main())
+
+    job = store.require_by_resume_token(access.resume_token)
+    assert job["status"] == "cancelled"
+    assert calls == []
+
+
 def test_cancel_is_a_no_op_for_a_job_with_no_running_task(tmp_path):
     store = JobStore(tmp_path)
     access = store.create_job(YOUTUBE_SOURCE)
@@ -214,6 +256,29 @@ def test_wrong_resume_secret_is_not_found(job_test_client):
     job_id = created.json()["resume_token"].split(".", 1)[0]
 
     assert client.get(f"/jobs/{job_id}.wrong-secret").status_code == 404
+
+
+def test_download_transcript_handles_pipeline_payload_shape(job_test_client):
+    client, store, calls = job_test_client
+
+    access = store.create_job(YOUTUBE_SOURCE)
+    store.update(
+        access.job_id,
+        transcript={
+            "transcript": [
+                {"text": "hola", "start": 0, "duration": 1},
+                {"text": "mundo", "start": 65, "duration": 1},
+            ],
+            "audio_path": "/tmp/audio.mp3",
+            "title": "Lesson",
+            "gate": {"verdict": "proceed"},
+        },
+    )
+
+    response = client.get(f"/jobs/{access.resume_token}/transcript")
+
+    assert response.status_code == 200
+    assert response.text == "[00:00] hola\n[01:05] mundo"
 
 
 def test_job_response_never_exposes_filesystem_paths(job_test_client):

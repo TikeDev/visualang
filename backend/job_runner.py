@@ -87,7 +87,9 @@ class JobRunner:
             stage_index = _STAGE_INDEX[start_stage]
 
             if stage_index <= _STAGE_INDEX["transcript"]:
-                transcript = await self.transcript_fn(job["source"])
+                transcript = await self.transcript_fn(
+                    job["source"], cancel_event=cancel_event
+                )
                 job = self.store.update(
                     job_id, transcript=transcript, stage="concepts"
                 )

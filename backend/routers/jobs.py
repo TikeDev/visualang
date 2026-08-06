@@ -42,8 +42,8 @@ _store: JobStore | None = None
 _runner: JobRunner | None = None
 
 
-async def _transcript_fn(source: dict) -> dict:
-    result = await _handle_youtube(source["url"])
+async def _transcript_fn(source: dict, *, cancel_event=None) -> dict:
+    result = await _handle_youtube(source["url"], cancel_event=cancel_event)
     return {
         "transcript": result["transcript"],
         "audio_path": result["audio_path"],
@@ -136,8 +136,8 @@ async def create_upload_job(file: UploadFile = File(...)):
     runner = get_job_runner()
     access = store.create_job({"type": "upload", "filename": file.filename})
 
-    async def transcript_fn(_source: dict) -> dict:
-        result = await _handle_upload(file)
+    async def transcript_fn(_source: dict, *, cancel_event=None) -> dict:
+        result = await _handle_upload(file, cancel_event=cancel_event)
         return {
             "transcript": result["transcript"],
             "audio_path": result["audio_path"],
@@ -196,10 +196,15 @@ async def download_job_video(resume_token: str):
 async def download_job_transcript(resume_token: str):
     job = require_job_by_token(resume_token)
     transcript_payload = job.get("transcript")
-    if not transcript_payload:
+    segments = (
+        transcript_payload.get("transcript")
+        if isinstance(transcript_payload, dict)
+        else transcript_payload
+    )
+    if not segments:
         raise HTTPException(status_code=404, detail="Transcript not available")
     lines = []
-    for seg in transcript_payload:
+    for seg in segments:
         start = int(seg.get("start", 0))
         mm, ss = divmod(start, 60)
         lines.append(f"[{mm:02d}:{ss:02d}] {seg.get('text', '')}")

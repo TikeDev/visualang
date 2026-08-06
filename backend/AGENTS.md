@@ -18,8 +18,8 @@ state-machine runner (no LangChain/LangGraph).
 POST /transcript          POST /concepts          POST /generate (stream)
       │                        │                         │
       ▼                        ▼                         ▼
-  TranscriptGate           ConceptExtractor         per-image:
-  (proceed/warn/           (3-node graph:          1. Nunchaku call
+  TranscriptGate           ConceptExtractor         per-image task:
+  (proceed/warn/           (3-node graph:          1. provider call
    reject)                  extract→critique        2. analyze_image tool (Haiku vision)
                             →fix)                   3. if has_text → ImagePromptRewriter
                                                        → regenerate once
@@ -48,20 +48,24 @@ agents/
   can surface warnings.
 - [`routers/concepts.py`](./routers/concepts.py) — replaced the naive single
   Claude call with `ConceptExtractor`.
-- [`routers/generate.py`](./routers/generate.py) — each generated image is
-  throttled and retried on `429` with backoff. Vision-check rewrite recovery
-  can be toggled off in env during provider instability to avoid extra
-  Nunchaku calls.
+- [`routers/generate.py`](./routers/generate.py) — generates concepts in
+  parallel with a configurable concurrency ceiling. Provider `429` and
+  temporary 5xx responses are retried with backoff. Vision-check rewrite
+  recovery can be toggled off in env.
 
 ## Env vars required
 
 - `ANTHROPIC_API_KEY` — used by all three agents
 - `OPENAI_API_KEY` — used only if Anthropic returns 5xx (fallback to `gpt-4.1`)
-- `NUNCHAKU_API_KEY` — used by `/generate`, not by agents directly
+- `CLOUDFLARE_ACCOUNT_ID` — account used by the Workers AI REST endpoint
+- `CLOUDFLARE_API_TOKEN` — token with Workers AI Read and Edit permissions
+- `IMAGE_PROVIDER` — defaults to `cloudflare`; set `nunchaku` for the fallback
+- `IMAGE_GENERATION_CONCURRENCY` — parallel concept ceiling, default `4`
+- `IMAGE_ENABLE_REWRITE_RECOVERY` — opt-in retry after vision text detection
+- `NUNCHAKU_API_KEY` — required only when `IMAGE_PROVIDER=nunchaku`
 - `NUNCHAKU_MIN_INTERVAL_SECONDS` — minimum gap between Nunchaku attempts
 - `NUNCHAKU_MAX_429_RETRIES` — retry budget for `429 Too Many Requests`
 - `NUNCHAKU_BACKOFF_BASE_SECONDS` — fallback backoff when `Retry-After` is missing
-- `NUNCHAKU_ENABLE_REWRITE_RECOVERY` — opt-in retry after vision text detection
 
 ## Model swaps
 
@@ -71,9 +75,8 @@ to change model selection without touching agent logic.
 
 ## Cost notes
 
-- Every generated image incurs one Haiku vision call (~$0.003). For an
-  8-image video: +~$0.024 on top of ~$0.032 Nunchaku cost. Accepted for MVP;
-  can be made opt-in later (only run on explicit user regenerate).
+- When rewrite recovery is enabled, every generated image incurs one Haiku
+  vision call. It is disabled by default to avoid that extra cost.
 - `ConceptExtractor` critique pass is mostly deterministic Python; only the
   visualizability rating calls Haiku. Typical overhead: 1 extra Sonnet fix
   call only when concepts are flagged.
@@ -93,13 +96,12 @@ prefixes in `uvicorn` output:
 Three small additions sit beside the agents:
 
 - **`routers/metrics.py`** — `GET /metrics` returns rolling p50/p95 of Claude
-  and Nunchaku latencies, plus counters for gate verdicts, rewriter triggers,
+  and image-provider latencies, plus counters for gate verdicts and rewriter triggers,
   and OpenAI fallback usage. `POST /metrics/reset` clears the window. In-memory
   only; resets on reload.
-- **`routers/generate.py`** — image generation now runs serially, one Nunchaku
-  request at a time, with a minimum spacing between attempts and `429`
-  backoff/retry. SSE events still stream after each image completes so the UI
-  progress counter stays live.
+- **`routers/generate.py`** — Cloudflare Workers AI is the default image
+  provider. Up to four requests run concurrently by default. SSE events stream
+  in completion order while the final list remains in transcript order.
 - **`scripts/seed_demo.py` + `routers/demo.py`** — `python scripts/seed_demo.py
   --slug <name> --url <yt-url>` runs the full pipeline once and saves the
   outputs under `backend/demo_seeds/<slug>/`. The `/demo/<slug>` endpoint then

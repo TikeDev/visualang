@@ -2,9 +2,11 @@ import asyncio
 import io
 import os
 import sys
+import threading
 from types import SimpleNamespace
 from unittest.mock import mock_open
 
+import pytest
 from fastapi.testclient import TestClient
 
 BACKEND_DIR = os.path.join(os.path.dirname(__file__), "..", "backend")
@@ -290,6 +292,29 @@ def test_yt_dlp_options_allow_missing_deno_path(monkeypatch):
     assert hasattr(opts["logger"], "error")
 
 
+def test_yt_dlp_options_include_socket_timeout():
+    opts = transcript.build_yt_dlp_options()
+
+    assert opts["socket_timeout"] == transcript.YT_DLP_SOCKET_TIMEOUT_SECONDS
+
+
+def test_handle_youtube_stops_when_cancel_event_set(monkeypatch):
+    calls = []
+    monkeypatch.setattr(transcript, "get_video_info", lambda url: calls.append("info"))
+    monkeypatch.setattr(transcript, "extract_audio", lambda video_url, output_base: calls.append("audio"))
+    monkeypatch.setattr(transcript, "transcribe_audio", lambda audio_path: calls.append("whisper"))
+
+    cancel_event = threading.Event()
+    cancel_event.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(
+            transcript._handle_youtube("https://youtu.be/abc123", cancel_event=cancel_event)
+        )
+
+    assert calls == []
+
+
 def test_transcript_youtube_falls_back_to_whisper_with_proxy_enabled(monkeypatch):
     monkeypatch.setattr(transcript, "YOUTUBE_PROXY_ENABLED", True)
     monkeypatch.setattr(transcript, "YOUTUBE_PROXY_HTTP_URL", "http://proxy.example:8080")
@@ -358,8 +383,9 @@ def test_transcribe_audio_uses_whisper_verbose_json(monkeypatch):
             self.transcriptions = FakeTranscriptions()
 
     class FakeOpenAI:
-        def __init__(self, api_key):
+        def __init__(self, api_key, timeout=None):
             captured["api_key"] = api_key
+            captured["timeout"] = timeout
             self.audio = FakeAudio()
 
     monkeypatch.setattr("openai.OpenAI", FakeOpenAI)
@@ -495,7 +521,7 @@ def test_transcript_gate_reject_returns_422(monkeypatch):
 def test_transcript_youtube_falls_back_to_whisper_when_captions_fail(monkeypatch):
     captured = {"extract_audio_calls": 0, "transcribe_audio_path": None}
 
-    monkeypatch.setattr(transcript, "YouTubeTranscriptApi", lambda: FailingYouTubeTranscriptApi())
+    monkeypatch.setattr(transcript, "YouTubeTranscriptApi", lambda **kwargs: FailingYouTubeTranscriptApi())
     monkeypatch.setattr(transcript, "get_video_info", lambda url: {"title": "No Captions Short", "duration": 14})
 
     def fake_extract_audio(video_url, output_base):
@@ -544,7 +570,7 @@ def test_transcript_youtube_falls_back_to_whisper_when_captions_fail(monkeypatch
 
 
 def test_transcript_gate_reject_after_whisper_fallback_returns_422(monkeypatch):
-    monkeypatch.setattr(transcript, "YouTubeTranscriptApi", lambda: FailingYouTubeTranscriptApi())
+    monkeypatch.setattr(transcript, "YouTubeTranscriptApi", lambda **kwargs: FailingYouTubeTranscriptApi())
     monkeypatch.setattr(transcript, "get_video_info", lambda url: {"title": "Sparse Short", "duration": 9})
     monkeypatch.setattr(transcript, "extract_audio", lambda video_url, output_base: None)
     monkeypatch.setattr(

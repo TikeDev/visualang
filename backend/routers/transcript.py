@@ -1,9 +1,11 @@
+import asyncio
 import logging
 import re
 import uuid
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+import requests
 import yt_dlp
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -15,10 +17,13 @@ from agents import transcript_gate
 from config import (
     OPENAI_API_KEY,
     VISUALANG_DATA_DIR,
+    WHISPER_TIMEOUT_SECONDS,
     YT_DLP_DENO_PATH,
+    YT_DLP_SOCKET_TIMEOUT_SECONDS,
     YOUTUBE_PROXY_ENABLED,
     YOUTUBE_PROXY_HTTP_URL,
     YOUTUBE_PROXY_HTTPS_URL,
+    YOUTUBE_TRANSCRIPT_TIMEOUT_SECONDS,
 )
 
 logger = logging.getLogger(__name__)
@@ -79,6 +84,17 @@ def normalize_transcript(segments: list, source: str) -> list:
 
 # --- Helpers ---
 
+def _raise_if_cancelled(cancel_event) -> None:
+    if cancel_event is not None and cancel_event.is_set():
+        raise asyncio.CancelledError("Transcript stage cancelled")
+
+
+class _TimeoutSession(requests.Session):
+    def request(self, *args, **kwargs):
+        kwargs.setdefault("timeout", YOUTUBE_TRANSCRIPT_TIMEOUT_SECONDS)
+        return super().request(*args, **kwargs)
+
+
 def youtube_proxy_enabled() -> bool:
     return YOUTUBE_PROXY_ENABLED and bool(YOUTUBE_PROXY_HTTP_URL or YOUTUBE_PROXY_HTTPS_URL)
 
@@ -102,12 +118,13 @@ def get_proxy_connection_label() -> str:
 
 def build_youtube_transcript_api():
     if not youtube_proxy_enabled():
-        return YouTubeTranscriptApi()
+        return YouTubeTranscriptApi(http_client=_TimeoutSession())
     return YouTubeTranscriptApi(
+        http_client=_TimeoutSession(),
         proxy_config=GenericProxyConfig(
             http_url=YOUTUBE_PROXY_HTTP_URL,
             https_url=YOUTUBE_PROXY_HTTPS_URL,
-        )
+        ),
     )
 
 
@@ -117,6 +134,7 @@ def build_yt_dlp_options(*, skip_download: bool = False, output_base: str | None
         "noprogress": True,
         "logger": YtDlpLogBridge(),
         "js_runtimes": {"deno": {"path": YT_DLP_DENO_PATH}},
+        "socket_timeout": YT_DLP_SOCKET_TIMEOUT_SECONDS,
     }
     if skip_download:
         ydl_opts["skip_download"] = True
@@ -150,7 +168,7 @@ def extract_audio(video_url: str, output_base: str):
 def transcribe_audio(audio_path: str) -> list:
     from openai import OpenAI
 
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    client = OpenAI(api_key=OPENAI_API_KEY, timeout=WHISPER_TIMEOUT_SECONDS)
     with open(audio_path, "rb") as f:
         response = client.audio.transcriptions.create(
             model="whisper-1",
@@ -227,13 +245,26 @@ def select_youtube_transcript(video_id: str):
     return selected
 
 
+def fetch_youtube_captions(video_id: str) -> list:
+    selected_transcript = select_youtube_transcript(video_id)
+    raw_transcript = selected_transcript.fetch().to_raw_data()
+    normalized = normalize_transcript(raw_transcript, "youtube")
+    logger.info(
+        "Fetched transcript: %s segments from %s (%s)",
+        len(normalized),
+        selected_transcript.language_code,
+        selected_transcript.language,
+    )
+    return normalized
+
+
 # --- Routes ---
 
 class YoutubeRequest(BaseModel):
     video_url: str
 
 
-async def _handle_youtube(video_url: str):
+async def _handle_youtube(video_url: str, cancel_event=None):
     logger.info(f"Transcript request for YouTube URL: {video_url}")
     try:
         video_id = extract_video_id(video_url)
@@ -241,11 +272,12 @@ async def _handle_youtube(video_url: str):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     logger.info("YouTube ingestion using %s", get_proxy_connection_label())
+    _raise_if_cancelled(cancel_event)
 
     info: dict | None = None
     title = "Untitled"
     try:
-        info = get_video_info(video_url)
+        info = await asyncio.to_thread(get_video_info, video_url)
         title = info["title"]
         logger.info(f"Video title: {title}")
     except Exception as e:
@@ -255,16 +287,9 @@ async def _handle_youtube(video_url: str):
     audio_path = build_youtube_audio_path(video_id)
     audio_ready = False
 
+    _raise_if_cancelled(cancel_event)
     try:
-        selected_transcript = select_youtube_transcript(video_id)
-        raw_transcript = selected_transcript.fetch().to_raw_data()
-        normalized = normalize_transcript(raw_transcript, "youtube")
-        logger.info(
-            "Fetched transcript: %s segments from %s (%s)",
-            len(normalized),
-            selected_transcript.language_code,
-            selected_transcript.language,
-        )
+        normalized = await asyncio.to_thread(fetch_youtube_captions, video_id)
     except Exception as e:
         logger.warning(
             "Transcript fetch failed for %s over %s; falling back to Whisper transcription: %s",
@@ -272,8 +297,9 @@ async def _handle_youtube(video_url: str):
             get_proxy_connection_label(),
             e,
         )
+        _raise_if_cancelled(cancel_event)
         try:
-            extract_audio(video_url, audio_base)
+            await asyncio.to_thread(extract_audio, video_url, audio_base)
             audio_ready = True
             logger.info(f"Audio extracted to: {audio_path}")
         except Exception as audio_error:
@@ -287,8 +313,9 @@ async def _handle_youtube(video_url: str):
                 detail="Failed to fetch transcript. Audio extraction fallback failed.",
             )
 
+        _raise_if_cancelled(cancel_event)
         try:
-            normalized = transcribe_audio(audio_path)
+            normalized = await asyncio.to_thread(transcribe_audio, audio_path)
             logger.info("Transcribed fallback audio: %s segments", len(normalized))
         except Exception as transcription_error:
             logger.error("Whisper fallback failed for %s: %s", video_id, transcription_error)
@@ -310,8 +337,9 @@ async def _handle_youtube(video_url: str):
         raise HTTPException(status_code=422, detail=f"Transcript rejected: {verdict.reason}")
 
     if not audio_ready:
+        _raise_if_cancelled(cancel_event)
         try:
-            extract_audio(video_url, audio_base)
+            await asyncio.to_thread(extract_audio, video_url, audio_base)
             audio_ready = True
             logger.info(f"Audio extracted to: {audio_path}")
         except Exception as e:
@@ -331,7 +359,7 @@ async def _handle_youtube(video_url: str):
     }
 
 
-async def _handle_upload(file: UploadFile):
+async def _handle_upload(file: UploadFile, cancel_event=None):
     logger.info(f"Transcript upload: {file.filename}, size={file.size}")
 
     suffix = Path(file.filename or "").suffix.lower()
@@ -350,8 +378,9 @@ async def _handle_upload(file: UploadFile):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
 
+    _raise_if_cancelled(cancel_event)
     try:
-        normalized = transcribe_audio(str(audio_path))
+        normalized = await asyncio.to_thread(transcribe_audio, str(audio_path))
         logger.info(f"Transcribed: {len(normalized)} segments")
     except Exception as e:
         logger.error(f"Transcription failed: {e}")
