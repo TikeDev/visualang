@@ -9,6 +9,7 @@ import {
   fetchJob,
   jobImagesUrl,
   jobTranscriptUrl,
+  jobVideoStreamUrl,
   jobVideoUrl,
   parseResumeTokenFromLocation,
   retryJob,
@@ -229,6 +230,7 @@ export default function App() {
   const previewTitle = job?.title || 'Your Visualang preview'
   const hasDownloads = job?.status === 'done'
   const audioSrc = job?.audio_url ? toAbsoluteUrl(job.audio_url) : null
+  const videoSrc = job?.status === 'done' && resumeToken ? jobVideoStreamUrl(resumeToken) : null
 
   return (
     <div className="app-shell">
@@ -311,12 +313,26 @@ export default function App() {
 
                 {imageLoadError && <div className="notice notice--warning">{imageLoadError}</div>}
 
-                <Player
-                  images={images}
-                  audioSrc={audioSrc}
-                  title={job.title}
-                  onImageError={handleImageError}
-                />
+                {videoSrc ? (
+                  <section className="player-card" aria-label="Generated video player">
+                    <div className="player-card__stage">
+                      <video
+                        className="player-card__video"
+                        src={videoSrc}
+                        controls
+                        playsInline
+                        preload="metadata"
+                      />
+                    </div>
+                  </section>
+                ) : (
+                  <Player
+                    images={images}
+                    audioSrc={audioSrc}
+                    title={job.title}
+                    onImageError={handleImageError}
+                  />
+                )}
 
                 {hasDownloads && (
                   <div className="stage-actions-section">

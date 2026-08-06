@@ -72,6 +72,10 @@ export function jobVideoUrl(resumeToken) {
   return `${API_URL}/jobs/${resumeToken}/video`
 }
 
+export function jobVideoStreamUrl(resumeToken) {
+  return `${API_URL}/jobs/${resumeToken}/video?inline=true`
+}
+
 export function jobTranscriptUrl(resumeToken) {
   return `${API_URL}/jobs/${resumeToken}/transcript`
 }

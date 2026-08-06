@@ -354,3 +354,31 @@ def test_job_response_never_exposes_filesystem_paths(job_test_client):
 
     assert "/var/data" not in str(body)
     assert "video_path" not in body
+
+
+def test_download_job_video_inline_and_attachment(job_test_client, tmp_path):
+    client, store, calls = job_test_client
+
+    video_file = tmp_path / "video.mp4"
+    video_file.write_bytes(b"mp4-bytes")
+
+    access = store.create_job(YOUTUBE_SOURCE)
+
+    assert (
+        client.get(f"/jobs/{access.resume_token}/video?inline=true").status_code == 404
+    )
+
+    store.update(
+        access.job_id, status="done", stage="export", video_path=str(video_file)
+    )
+
+    download = client.get(f"/jobs/{access.resume_token}/video")
+    assert download.status_code == 200
+    assert "attachment" in download.headers["content-disposition"]
+    assert download.headers["cache-control"] == "no-store"
+
+    inline = client.get(f"/jobs/{access.resume_token}/video?inline=true")
+    assert inline.status_code == 200
+    assert inline.headers["content-disposition"] == "inline"
+    assert "private" in inline.headers["cache-control"]
+    assert inline.content == b"mp4-bytes"

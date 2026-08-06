@@ -608,6 +608,13 @@ a {
   transition: opacity 0.8s ease-in-out;
 }
 
+.player-card__video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 .player-card__image {
   width: 100%;
   height: 100%;
