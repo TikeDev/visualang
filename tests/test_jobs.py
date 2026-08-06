@@ -1,7 +1,9 @@
 import asyncio
+import io
 import os
 import sys
 import threading
+import zipfile
 
 import pytest
 from fastapi.testclient import TestClient
@@ -12,6 +14,7 @@ if BACKEND_DIR not in sys.path:
 
 from job_store import JobStore  # noqa: E402
 from job_runner import JobRunner  # noqa: E402
+from routers import generate as generate_router  # noqa: E402
 from routers import jobs as jobs_router  # noqa: E402
 from main import app  # noqa: E402
 
@@ -279,6 +282,56 @@ def test_download_transcript_handles_pipeline_payload_shape(job_test_client):
 
     assert response.status_code == 200
     assert response.text == "[00:00] hola\n[01:05] mundo"
+
+
+def test_download_images_returns_zip_of_image_files(job_test_client, tmp_path, monkeypatch):
+    client, store, calls = job_test_client
+
+    image_dir = tmp_path / "artifacts"
+    image_dir.mkdir()
+    (image_dir / "abc.jpg").write_bytes(b"first-image")
+    (image_dir / "def.jpg").write_bytes(b"second-image")
+    monkeypatch.setattr(generate_router, "IMAGE_DIR", image_dir)
+
+    access = store.create_job(YOUTUBE_SOURCE)
+    store.update(
+        access.job_id,
+        images=[
+            {"timestamp_seconds": 27, "image_url": "/images/abc.jpg"},
+            {"timestamp_seconds": 59, "image_url": "/images/def.jpg"},
+        ],
+    )
+
+    response = client.get(f"/jobs/{access.resume_token}/images")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/zip"
+    assert (
+        response.headers["content-disposition"]
+        == 'attachment; filename="visualang_images.zip"'
+    )
+    archive = zipfile.ZipFile(io.BytesIO(response.content))
+    assert archive.namelist() == ["01_27s.jpg", "02_59s.jpg"]
+    assert archive.read("01_27s.jpg") == b"first-image"
+    assert archive.read("02_59s.jpg") == b"second-image"
+
+
+def test_download_images_404s_when_no_files_exist_on_disk(
+    job_test_client, tmp_path, monkeypatch
+):
+    client, store, calls = job_test_client
+
+    image_dir = tmp_path / "artifacts"
+    image_dir.mkdir()
+    monkeypatch.setattr(generate_router, "IMAGE_DIR", image_dir)
+
+    access = store.create_job(YOUTUBE_SOURCE)
+    store.update(
+        access.job_id,
+        images=[{"timestamp_seconds": 27, "image_url": "/images/missing.jpg"}],
+    )
+
+    assert client.get(f"/jobs/{access.resume_token}/images").status_code == 404
 
 
 def test_job_response_never_exposes_filesystem_paths(job_test_client):

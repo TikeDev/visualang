@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import logging
+import zipfile
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, Response, UploadFile
@@ -218,10 +220,35 @@ async def download_job_transcript(resume_token: str):
     )
 
 
+def _build_images_zip(entries: list[tuple[object, Path]]) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_STORED) as archive:
+        for index, (timestamp, path) in enumerate(entries, start=1):
+            label = f"{int(timestamp)}s" if timestamp is not None else path.stem
+            archive.write(path, arcname=f"{index:02d}_{label}{path.suffix}")
+    return buffer.getvalue()
+
+
 @router.get("/jobs/{resume_token}/images")
 async def download_job_images(resume_token: str):
     job = require_job_by_token(resume_token)
     images = job.get("images")
     if not images:
         raise HTTPException(status_code=404, detail="Images not available")
-    return private_response({"images": images})
+    entries = []
+    for image in images:
+        name = Path(image.get("image_url", "")).name
+        path = generate_router.IMAGE_DIR / name
+        if name and path.is_file():
+            entries.append((image.get("timestamp_seconds"), path))
+    if not entries:
+        raise HTTPException(status_code=404, detail="Images not available")
+    zip_bytes = await asyncio.to_thread(_build_images_zip, entries)
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={
+            **PRIVATE_RESPONSE_HEADERS,
+            "Content-Disposition": 'attachment; filename="visualang_images.zip"',
+        },
+    )

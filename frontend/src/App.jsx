@@ -340,7 +340,7 @@ export default function App() {
                       </a>
                       <a
                         href={jobImagesUrl(resumeToken)}
-                        download="visualang_images.json"
+                        download="visualang_images.zip"
                         className="button button--secondary"
                       >
                         <ImagesSquare size={20} weight="fill" aria-hidden="true" />
