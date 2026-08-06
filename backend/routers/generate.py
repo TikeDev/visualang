@@ -2,12 +2,10 @@ import asyncio
 import base64
 import json
 import logging
-import threading
 import time
 import uuid
 from pathlib import Path
 
-import requests
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -15,16 +13,10 @@ from starlette.concurrency import run_in_threadpool
 
 from agents import image_rewriter
 from agents.tools import analyze_image_handler
+import image_providers
 from config import (
-    NUNCHAKU_API_KEY,
-    NUNCHAKU_BACKOFF_BASE_SECONDS,
-    NUNCHAKU_BASE_URL,
-    NUNCHAKU_ENABLE_REWRITE_RECOVERY,
-    NUNCHAKU_MAX_429_RETRIES,
-    NUNCHAKU_MIN_INTERVAL_SECONDS,
-    NUNCHAKU_MODEL,
-    NUNCHAKU_NEGATIVE_PROMPT,
-    NUNCHAKU_TIER,
+    IMAGE_ENABLE_REWRITE_RECOVERY,
+    IMAGE_GENERATION_CONCURRENCY,
     VISUALANG_DATA_DIR,
 )
 from routers import metrics
@@ -34,10 +26,6 @@ router = APIRouter()
 
 IMAGE_DIR = VISUALANG_DATA_DIR / "artifacts"
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
-
-_THROTTLE_LOCK = threading.Lock()
-_NEXT_NUNCHAKU_ATTEMPT_AT = 0.0
-MAX_NUNCHAKU_BACKOFF_SECONDS = 12.0
 
 
 class GenerationCancelled(Exception):
@@ -51,97 +39,36 @@ def _raise_if_cancelled(cancel_event, filepath: str | None = None) -> None:
         raise GenerationCancelled("Image generation cancelled")
 
 
-def _reserve_nunchaku_slot(now_fn=time.monotonic) -> float:
-    """Reserve the next outbound attempt slot across all Nunchaku calls."""
-    global _NEXT_NUNCHAKU_ATTEMPT_AT
-
-    with _THROTTLE_LOCK:
-        now = now_fn()
-        reserved_at = max(now, _NEXT_NUNCHAKU_ATTEMPT_AT)
-        _NEXT_NUNCHAKU_ATTEMPT_AT = reserved_at + NUNCHAKU_MIN_INTERVAL_SECONDS
-    return max(0.0, reserved_at - now)
-
-
-def _get_retry_delay_seconds(response: requests.Response, attempt: int) -> float:
-    retry_after = response.headers.get("Retry-After")
-    if retry_after is not None:
-        try:
-            return max(0.0, float(retry_after))
-        except (TypeError, ValueError):
-            logger.warning("Invalid Retry-After header from Nunchaku: %r", retry_after)
-
-    return min(NUNCHAKU_BACKOFF_BASE_SECONDS * (2 ** attempt), MAX_NUNCHAKU_BACKOFF_SECONDS)
-
-
-def _call_nunchaku(
-    prompt: str,
-    model: str,
-    tier: str,
-    *,
-    post_fn=requests.post,
-    sleep_fn=time.sleep,
-    now_fn=time.monotonic,
-) -> str:
-    """Call Nunchaku and return the raw base64 JPEG (pre-decode)."""
-    for attempt in range(NUNCHAKU_MAX_429_RETRIES + 1):
-        spacing_delay = _reserve_nunchaku_slot(now_fn=now_fn)
-        if spacing_delay > 0:
-            logger.info("Waiting %.1fs before next Nunchaku request", spacing_delay)
-            sleep_fn(spacing_delay)
-
-        response = post_fn(
-            f"{NUNCHAKU_BASE_URL}/v1/images/generations",
-            headers={
-                "Authorization": f"Bearer {NUNCHAKU_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": model,
-                "prompt": prompt,
-                "n": 1,
-                "size": "1024x1024",
-                "tier": tier,
-                "response_format": "b64_json",
-                "negative_prompt": NUNCHAKU_NEGATIVE_PROMPT,
-            },
-            timeout=60,
-        )
-        if response.status_code != 429:
-            response.raise_for_status()
-            return response.json()["data"][0]["b64_json"]
-
-        if attempt >= NUNCHAKU_MAX_429_RETRIES:
-            response.raise_for_status()
-
-        retry_delay = _get_retry_delay_seconds(response, attempt)
-        logger.warning(
-            "Nunchaku returned 429; retrying in %.1fs (%s/%s)",
-            retry_delay,
-            attempt + 1,
-            NUNCHAKU_MAX_429_RETRIES,
-        )
-        sleep_fn(retry_delay)
-
-    raise RuntimeError("Nunchaku retry loop exited unexpectedly")
-
-
-def _save_b64(b64_data: str) -> str:
+def _save_bytes(image_bytes: bytes) -> str:
     filename = f"{uuid.uuid4()}.jpg"
     filepath = IMAGE_DIR / filename
-    filepath.write_bytes(base64.b64decode(b64_data))
+    filepath.write_bytes(image_bytes)
     return str(filepath)
 
 
-def generate_image(prompt: str, model: str = NUNCHAKU_MODEL, tier: str = NUNCHAKU_TIER) -> dict:
+def generate_image(prompt: str) -> dict:
     """Generate an image. Returns {filepath, b64} so callers can vision-check
     without re-reading the file."""
     start = time.time()
-    b64_data = _call_nunchaku(prompt, model, tier)
-    filepath = _save_b64(b64_data)
+    generated = image_providers.generate(prompt)
+    filepath = _save_bytes(generated.image_bytes)
+    b64_data = base64.b64encode(generated.image_bytes).decode("ascii")
     elapsed_ms = int((time.time() - start) * 1000)
-    metrics.record("nunchaku_generate_ms", elapsed_ms)
-    logger.info(f"Generated image in {elapsed_ms}ms | model={model} tier={tier} | {prompt[:80]}")
-    return {"filepath": filepath, "b64": b64_data}
+    metrics.record("image_generate_ms", elapsed_ms)
+    metrics.record(f"{generated.provider}_generate_ms", elapsed_ms)
+    logger.info(
+        "Generated image in %sms | provider=%s model=%s | %s",
+        elapsed_ms,
+        generated.provider,
+        generated.model,
+        prompt[:80],
+    )
+    return {
+        "filepath": filepath,
+        "b64": b64_data,
+        "provider": generated.provider,
+        "model": generated.model,
+    }
 
 
 def _generate_image_cancellable(prompt: str, cancel_event=None) -> dict:
@@ -157,10 +84,30 @@ async def _generate_with_recovery(concept: dict, cancel_event=None) -> dict:
     concept_name = concept["concept"]
 
     _raise_if_cancelled(cancel_event)
-    result = await run_in_threadpool(
-        _generate_image_cancellable, original_prompt, cancel_event
-    )
-    if not NUNCHAKU_ENABLE_REWRITE_RECOVERY:
+    try:
+        result = await run_in_threadpool(
+            _generate_image_cancellable, original_prompt, cancel_event
+        )
+    except image_providers.ImageContentPolicyError as exc:
+        _raise_if_cancelled(cancel_event)
+        logger.info(
+            "Image provider rejected prompt for '%s' — rewriting prompt",
+            concept_name,
+        )
+        metrics.record("rewriter_triggered", 1)
+        rewrite = await image_rewriter.run(
+            original_prompt=original_prompt,
+            failure_signal=f"image provider rejected prompt: {exc}",
+            concept=concept_name,
+        )
+        _raise_if_cancelled(cancel_event)
+        result = await run_in_threadpool(
+            _generate_image_cancellable, rewrite.revised_prompt, cancel_event
+        )
+        logger.info("Retry used revised prompt: %s", rewrite.reasoning[:80])
+        return {**result, "prompt_used": rewrite.revised_prompt}
+
+    if not IMAGE_ENABLE_REWRITE_RECOVERY:
         return {**result, "prompt_used": original_prompt}
 
     _raise_if_cancelled(cancel_event, result["filepath"])
@@ -173,8 +120,14 @@ async def _generate_with_recovery(concept: dict, cancel_event=None) -> dict:
     if not check.get("has_text"):
         return {**result, "prompt_used": original_prompt}
 
-    failure_signal = f"vision check detected text in output: {check.get('details', '')}"
-    logger.info("Image failed post-check for '%s' — rewriting prompt", concept_name)
+    failure_signal = (
+        "vision check detected text in output: "
+        f"{check.get('details', '')}"
+    )
+    logger.info(
+        "Image failed post-check for '%s' — rewriting prompt",
+        concept_name,
+    )
     metrics.record("rewriter_triggered", 1)
 
     _raise_if_cancelled(cancel_event, result["filepath"])
@@ -196,26 +149,69 @@ async def _generate_with_recovery(concept: dict, cancel_event=None) -> dict:
     return {**retry, "prompt_used": rewrite.revised_prompt}
 
 
-async def generate_images(concepts: list, cancel_event=None, on_progress=None) -> list[dict]:
+async def generate_images(
+    concepts: list,
+    cancel_event=None,
+    on_progress=None,
+) -> list[dict]:
     total = len(concepts)
-    images = []
-    for index, concept in enumerate(concepts, start=1):
-        _raise_if_cancelled(cancel_event)
-        final = await _generate_with_recovery(concept, cancel_event=cancel_event)
+    if total == 0:
+        return []
+
+    batch_cancel = cancel_event or asyncio.Event()
+    semaphore = asyncio.Semaphore(IMAGE_GENERATION_CONCURRENCY)
+    ordered_images: list[dict | None] = [None] * total
+
+    async def generate_one(original_index: int, concept: dict):
+        _raise_if_cancelled(batch_cancel)
+        async with semaphore:
+            _raise_if_cancelled(batch_cancel)
+            final = await _generate_with_recovery(
+                concept, cancel_event=batch_cancel
+            )
         image = {
             "timestamp_seconds": concept["timestamp_seconds"],
             "image_url": f"/images/{Path(final['filepath']).name}",
         }
-        _raise_if_cancelled(cancel_event, final["filepath"])
-        images.append(image)
-        if on_progress is not None:
-            try:
-                _raise_if_cancelled(cancel_event, final["filepath"])
-            except GenerationCancelled:
-                images.pop()
-                raise
-            await on_progress(index, total, concept, image)
-    return images
+        _raise_if_cancelled(batch_cancel, final["filepath"])
+        return original_index, concept, image, final["filepath"]
+
+    tasks = [
+        asyncio.create_task(generate_one(index, concept))
+        for index, concept in enumerate(concepts)
+    ]
+    completed_count = 0
+    published_indices: set[int] = set()
+
+    try:
+        for completed in asyncio.as_completed(tasks):
+            original_index, concept, image, filepath = await completed
+            _raise_if_cancelled(batch_cancel, filepath)
+            ordered_images[original_index] = image
+            completed_count += 1
+            if on_progress is not None:
+                await on_progress(
+                    completed_count,
+                    total,
+                    concept,
+                    image,
+                )
+                published_indices.add(original_index)
+    except BaseException:
+        batch_cancel.set()
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        task_results = await asyncio.gather(*tasks, return_exceptions=True)
+        for task_result in task_results:
+            if not isinstance(task_result, tuple) or len(task_result) != 4:
+                continue
+            original_index, _concept, _image, filepath = task_result
+            if original_index not in published_indices:
+                Path(filepath).unlink(missing_ok=True)
+        raise
+
+    return [image for image in ordered_images if image is not None]
 
 
 async def generate_images_stream(concepts: list):
@@ -244,7 +240,9 @@ async def generate_images_stream(concepts: list):
         )
         while not generation_task.done() or not progress_events.empty():
             try:
-                yield await asyncio.wait_for(progress_events.get(), timeout=0.05)
+                yield await asyncio.wait_for(
+                    progress_events.get(), timeout=0.05
+                )
             except asyncio.TimeoutError:
                 continue
         ordered = await generation_task

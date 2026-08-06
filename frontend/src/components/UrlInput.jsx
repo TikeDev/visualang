@@ -10,6 +10,7 @@ export default function UrlInput({ onSubmit }) {
   const [url, setUrl] = useState('')
   const [file, setFile] = useState(null)
   const [error, setError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const urlInputRef = useRef(null)
   const fileInputRef = useRef(null)
 
@@ -40,7 +41,7 @@ export default function UrlInput({ onSubmit }) {
     setFile(selectedFile)
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault()
     if (mode === 'youtube') {
       if (!YT_REGEX.test(url)) {
@@ -48,7 +49,12 @@ export default function UrlInput({ onSubmit }) {
         urlInputRef.current?.focus()
         return
       }
-      onSubmit({ type: 'youtube', url })
+      setIsSubmitting(true)
+      try {
+        await onSubmit({ type: 'youtube', url })
+      } finally {
+        setIsSubmitting(false)
+      }
       return
     }
 
@@ -58,7 +64,12 @@ export default function UrlInput({ onSubmit }) {
       return
     }
 
-    onSubmit({ type: 'file', file })
+    setIsSubmitting(true)
+    try {
+      await onSubmit({ type: 'file', file })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const isValid = mode === 'youtube' ? YT_REGEX.test(url) : file !== null
@@ -164,8 +175,12 @@ export default function UrlInput({ onSubmit }) {
           </p>
         )}
 
-        <button type="submit" className="button button--primary panel__submit" disabled={!isValid}>
-          Generate Illustrated Preview
+        <button
+          type="submit"
+          className="button button--primary panel__submit"
+          disabled={!isValid || isSubmitting}
+        >
+          {isSubmitting ? 'Starting...' : 'Generate Illustrated Preview'}
         </button>
       </form>
     </section>

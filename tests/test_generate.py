@@ -6,7 +6,6 @@ import threading
 from types import SimpleNamespace
 
 import pytest
-import requests
 from fastapi.testclient import TestClient
 
 BACKEND_DIR = os.path.join(os.path.dirname(__file__), "..", "backend")
@@ -16,25 +15,11 @@ if BACKEND_DIR not in sys.path:
 from routers import generate
 from routers import export, transcript
 from config import VISUALANG_DATA_DIR
+from image_providers import GeneratedImage
 from main import app
 
 
 client = TestClient(app)
-
-
-class FakeResponse:
-    def __init__(self, status_code, payload=None, headers=None):
-        self.status_code = status_code
-        self._payload = payload or {}
-        self.headers = headers or {}
-        self.text = str(self._payload)
-
-    def raise_for_status(self):
-        if self.status_code >= 400:
-            raise requests.HTTPError(f"{self.status_code} Client Error")
-
-    def json(self):
-        return self._payload
 
 
 def test_artifact_roots_use_configured_data_directory():
@@ -58,178 +43,62 @@ def test_images_route_serves_configured_artifact():
         image_path.unlink(missing_ok=True)
 
 
+def test_generate_image_uses_selected_provider_and_records_metrics(monkeypatch, tmp_path):
+    recorded = []
+
+    monkeypatch.setattr(generate, "IMAGE_DIR", tmp_path)
+    monkeypatch.setattr(
+        generate.image_providers,
+        "generate",
+        lambda prompt: GeneratedImage(
+            image_bytes=b"provider-image",
+            provider="cloudflare",
+            model="@cf/black-forest-labs/flux-1-schnell",
+        ),
+    )
+    monkeypatch.setattr(
+        generate.metrics, "record", lambda name, value: recorded.append((name, value))
+    )
+
+    result = generate.generate_image("storybook fox")
+
+    assert base64.b64decode(result["b64"]) == b"provider-image"
+    assert result["provider"] == "cloudflare"
+    assert result["model"] == "@cf/black-forest-labs/flux-1-schnell"
+    assert result["filepath"].endswith(".jpg")
+    assert (tmp_path / os.path.basename(result["filepath"])).read_bytes() == b"provider-image"
+    assert [name for name, _value in recorded] == [
+        "image_generate_ms",
+        "cloudflare_generate_ms",
+    ]
+
+
 @pytest.fixture(autouse=True)
 def reset_generate_state(monkeypatch):
-    monkeypatch.setattr(generate, "_NEXT_NUNCHAKU_ATTEMPT_AT", 0.0)
-    monkeypatch.setattr(generate, "NUNCHAKU_MIN_INTERVAL_SECONDS", 2.0)
-    monkeypatch.setattr(generate, "NUNCHAKU_MAX_429_RETRIES", 4)
-    monkeypatch.setattr(generate, "NUNCHAKU_BACKOFF_BASE_SECONDS", 3.0)
-    monkeypatch.setattr(generate, "NUNCHAKU_ENABLE_REWRITE_RECOVERY", False)
-
-
-def test_call_nunchaku_success_first_attempt():
-    calls = []
-
-    def fake_post(*args, **kwargs):
-        calls.append((args, kwargs))
-        return FakeResponse(200, {"data": [{"b64_json": "abc123"}]})
-
-    result = generate._call_nunchaku("prompt", "model", "tier", post_fn=fake_post)
-
-    assert result == "abc123"
-    assert len(calls) == 1
-
-
-def test_call_nunchaku_retries_429_using_retry_after(monkeypatch):
-    responses = [
-        FakeResponse(429, headers={"Retry-After": "5"}),
-        FakeResponse(200, {"data": [{"b64_json": "ok"}]}),
-    ]
-    sleeps = []
-    current_time = [0.0]
-
-    def fake_sleep(seconds):
-        sleeps.append(seconds)
-        current_time[0] += seconds
-
-    def fake_now():
-        return current_time[0]
-
-    def fake_post(*args, **kwargs):
-        return responses.pop(0)
-
-    result = generate._call_nunchaku(
-        "prompt",
-        "model",
-        "tier",
-        post_fn=fake_post,
-        sleep_fn=fake_sleep,
-        now_fn=fake_now,
-    )
-
-    assert result == "ok"
-    assert sleeps == [5.0]
-
-
-def test_call_nunchaku_retries_429_using_backoff_when_retry_after_missing():
-    responses = [
-        FakeResponse(429),
-        FakeResponse(200, {"data": [{"b64_json": "ok"}]}),
-    ]
-    sleeps = []
-    current_time = [0.0]
-
-    def fake_sleep(seconds):
-        sleeps.append(seconds)
-        current_time[0] += seconds
-
-    def fake_now():
-        return current_time[0]
-
-    def fake_post(*args, **kwargs):
-        return responses.pop(0)
-
-    result = generate._call_nunchaku(
-        "prompt",
-        "model",
-        "tier",
-        post_fn=fake_post,
-        sleep_fn=fake_sleep,
-        now_fn=fake_now,
-    )
-
-    assert result == "ok"
-    assert sleeps == [3.0]
-
-
-def test_call_nunchaku_exhausts_429_retry_budget():
-    responses = [
-        FakeResponse(429),
-        FakeResponse(429),
-        FakeResponse(429),
-    ]
-    sleeps = []
-    current_time = [0.0]
-
-    def fake_sleep(seconds):
-        sleeps.append(seconds)
-        current_time[0] += seconds
-
-    def fake_now():
-        return current_time[0]
-
-    def fake_post(*args, **kwargs):
-        return responses.pop(0)
-
-    generate.NUNCHAKU_MAX_429_RETRIES = 2
-    with pytest.raises(requests.HTTPError):
-        generate._call_nunchaku(
-            "prompt",
-            "model",
-            "tier",
-            post_fn=fake_post,
-            sleep_fn=fake_sleep,
-            now_fn=fake_now,
-        )
-
-    assert sleeps == [3.0, 6.0]
-
-
-def test_call_nunchaku_enforces_spacing_between_calls():
-    responses = [
-        FakeResponse(200, {"data": [{"b64_json": "one"}]}),
-        FakeResponse(200, {"data": [{"b64_json": "two"}]}),
-    ]
-    sleeps = []
-    current_time = [0.0]
-
-    def fake_sleep(seconds):
-        sleeps.append(seconds)
-        current_time[0] += seconds
-
-    def fake_now():
-        return current_time[0]
-
-    def fake_post(*args, **kwargs):
-        return responses.pop(0)
-
-    assert generate._call_nunchaku(
-        "prompt-1",
-        "model",
-        "tier",
-        post_fn=fake_post,
-        sleep_fn=fake_sleep,
-        now_fn=fake_now,
-    ) == "one"
-    assert generate._call_nunchaku(
-        "prompt-2",
-        "model",
-        "tier",
-        post_fn=fake_post,
-        sleep_fn=fake_sleep,
-        now_fn=fake_now,
-    ) == "two"
-
-    assert sleeps == [2.0]
+    monkeypatch.setattr(generate, "IMAGE_ENABLE_REWRITE_RECOVERY", False)
 
 
 def test_generate_with_recovery_skips_rewrite_when_disabled(monkeypatch):
     prompts = []
     encoded = base64.b64encode(b"image").decode("ascii")
 
-    def fake_call_nunchaku(prompt, model, tier, **kwargs):
+    def fake_generate(prompt):
         prompts.append(prompt)
-        return encoded
+        return GeneratedImage(
+            image_bytes=base64.b64decode(encoded),
+            provider="cloudflare",
+            model="@cf/black-forest-labs/flux-1-schnell",
+        )
 
-    def fake_save_b64(b64_data):
-        assert b64_data == encoded
+    def fake_save_bytes(image_bytes):
+        assert image_bytes == b"image"
         return "/tmp/fake-image.jpg"
 
     async def fail_analyze(**kwargs):
         raise AssertionError("vision analysis should be skipped when rewrite recovery is disabled")
 
-    monkeypatch.setattr(generate, "_call_nunchaku", fake_call_nunchaku)
-    monkeypatch.setattr(generate, "_save_b64", fake_save_b64)
+    monkeypatch.setattr(generate.image_providers, "generate", fake_generate)
+    monkeypatch.setattr(generate, "_save_bytes", fake_save_bytes)
     monkeypatch.setattr(generate, "analyze_image_handler", fail_analyze)
 
     result = asyncio.run(
@@ -237,18 +106,27 @@ def test_generate_with_recovery_skips_rewrite_when_disabled(monkeypatch):
     )
 
     assert prompts == ["original prompt"]
-    assert result == {"filepath": "/tmp/fake-image.jpg", "b64": encoded, "prompt_used": "original prompt"}
+    assert result == {
+        "filepath": "/tmp/fake-image.jpg",
+        "b64": encoded,
+        "provider": "cloudflare",
+        "model": "@cf/black-forest-labs/flux-1-schnell",
+        "prompt_used": "original prompt",
+    }
 
 
 def test_generate_with_recovery_uses_rewritten_prompt_when_enabled(monkeypatch):
     prompts = []
 
-    def fake_call_nunchaku(prompt, model, tier, **kwargs):
+    def fake_generate(prompt):
         prompts.append(prompt)
-        encoded = base64.b64encode(prompt.encode("utf-8")).decode("ascii")
-        return encoded
+        return GeneratedImage(
+            image_bytes=prompt.encode("utf-8"),
+            provider="cloudflare",
+            model="@cf/black-forest-labs/flux-1-schnell",
+        )
 
-    def fake_save_b64(_b64_data):
+    def fake_save_bytes(_image_bytes):
         return "/tmp/fake-image.jpg"
 
     async def fake_analyze(**kwargs):
@@ -258,9 +136,9 @@ def test_generate_with_recovery_uses_rewritten_prompt_when_enabled(monkeypatch):
         assert kwargs["original_prompt"] == "original prompt"
         return SimpleNamespace(revised_prompt="rewritten prompt", reasoning="remove text")
 
-    monkeypatch.setattr(generate, "NUNCHAKU_ENABLE_REWRITE_RECOVERY", True)
-    monkeypatch.setattr(generate, "_call_nunchaku", fake_call_nunchaku)
-    monkeypatch.setattr(generate, "_save_b64", fake_save_b64)
+    monkeypatch.setattr(generate, "IMAGE_ENABLE_REWRITE_RECOVERY", True)
+    monkeypatch.setattr(generate.image_providers, "generate", fake_generate)
+    monkeypatch.setattr(generate, "_save_bytes", fake_save_bytes)
     monkeypatch.setattr(generate, "analyze_image_handler", fake_analyze)
     monkeypatch.setattr(generate.image_rewriter, "run", fake_rewrite_run)
 
@@ -271,6 +149,47 @@ def test_generate_with_recovery_uses_rewritten_prompt_when_enabled(monkeypatch):
     assert prompts == ["original prompt", "rewritten prompt"]
     assert result["filepath"] == "/tmp/fake-image.jpg"
     assert result["prompt_used"] == "rewritten prompt"
+
+
+def test_generate_with_recovery_rewrites_prompt_on_content_policy_rejection(monkeypatch):
+    prompts = []
+    encoded = base64.b64encode(b"image").decode("ascii")
+
+    def fake_generate(prompt):
+        prompts.append(prompt)
+        if prompt == "original prompt":
+            raise generate.image_providers.ImageContentPolicyError(
+                "Cloudflare rejected the prompt: flagged"
+            )
+        return GeneratedImage(
+            image_bytes=base64.b64decode(encoded),
+            provider="cloudflare",
+            model="@cf/black-forest-labs/flux-1-schnell",
+        )
+
+    def fake_save_bytes(_image_bytes):
+        return "/tmp/fake-image.jpg"
+
+    async def fake_rewrite_run(**kwargs):
+        assert kwargs["original_prompt"] == "original prompt"
+        assert "flagged" in kwargs["failure_signal"]
+        return SimpleNamespace(revised_prompt="rewritten prompt", reasoning="softened")
+
+    async def fail_analyze(**kwargs):
+        raise AssertionError("vision analysis should not run for content-policy retry path")
+
+    monkeypatch.setattr(generate.image_providers, "generate", fake_generate)
+    monkeypatch.setattr(generate, "_save_bytes", fake_save_bytes)
+    monkeypatch.setattr(generate, "analyze_image_handler", fail_analyze)
+    monkeypatch.setattr(generate.image_rewriter, "run", fake_rewrite_run)
+
+    result = asyncio.run(
+        generate._generate_with_recovery({"concept": "tea", "image_prompt": "original prompt"})
+    )
+
+    assert prompts == ["original prompt", "rewritten prompt"]
+    assert result["prompt_used"] == "rewritten prompt"
+    assert base64.b64decode(result["b64"]) == b"image"
 
 
 def test_generate_images_stops_before_next_provider_call_when_cancelled(monkeypatch):
@@ -325,6 +244,103 @@ def test_generate_images_reports_progress_in_result_order(monkeypatch):
     ]
 
 
+def test_generate_images_runs_concurrently_streams_completion_order_and_returns_input_order(
+    monkeypatch,
+):
+    progress = []
+    active = 0
+    max_active = 0
+    release_first = asyncio.Event()
+    concepts = [
+        {"concept": "first", "image_prompt": "one", "timestamp_seconds": 0},
+        {"concept": "second", "image_prompt": "two", "timestamp_seconds": 7},
+    ]
+
+    async def fake_generate_with_recovery(concept, cancel_event=None):
+        nonlocal active, max_active
+        active += 1
+        max_active = max(max_active, active)
+        try:
+            if concept["concept"] == "first":
+                await release_first.wait()
+            else:
+                await asyncio.sleep(0)
+                release_first.set()
+            return {"filepath": f"/tmp/{concept['concept']}.jpg", "b64": "image"}
+        finally:
+            active -= 1
+
+    async def on_progress(index, total, concept, image):
+        progress.append((index, total, concept["concept"], image.copy()))
+
+    async def run():
+        return await asyncio.wait_for(
+            generate.generate_images(concepts, on_progress=on_progress),
+            timeout=0.5,
+        )
+
+    monkeypatch.setattr(generate, "IMAGE_GENERATION_CONCURRENCY", 2)
+    monkeypatch.setattr(generate, "_generate_with_recovery", fake_generate_with_recovery)
+
+    images = asyncio.run(run())
+
+    assert max_active == 2
+    assert [item[2] for item in progress] == ["second", "first"]
+    assert [image["timestamp_seconds"] for image in images] == [0, 7]
+
+
+def test_generate_images_cancels_siblings_when_one_fails(monkeypatch):
+    slow_cancelled = asyncio.Event()
+    concepts = [
+        {"concept": "fail", "image_prompt": "one", "timestamp_seconds": 0},
+        {"concept": "slow", "image_prompt": "two", "timestamp_seconds": 7},
+    ]
+
+    async def fake_generate_with_recovery(concept, cancel_event=None):
+        if concept["concept"] == "fail":
+            await asyncio.sleep(0)
+            raise RuntimeError("provider unavailable")
+        try:
+            await asyncio.Event().wait()
+        finally:
+            slow_cancelled.set()
+
+    monkeypatch.setattr(generate, "IMAGE_GENERATION_CONCURRENCY", 2)
+    monkeypatch.setattr(generate, "_generate_with_recovery", fake_generate_with_recovery)
+
+    with pytest.raises(RuntimeError, match="provider unavailable"):
+        asyncio.run(generate.generate_images(concepts))
+
+    assert slow_cancelled.is_set()
+
+
+def test_generate_images_deletes_unpublished_success_when_sibling_fails(
+    monkeypatch, tmp_path
+):
+    generated_path = tmp_path / "unpublished.jpg"
+    success_done = asyncio.Event()
+    concepts = [
+        {"concept": "success", "image_prompt": "one", "timestamp_seconds": 0},
+        {"concept": "fail", "image_prompt": "two", "timestamp_seconds": 7},
+    ]
+
+    async def fake_generate_with_recovery(concept, cancel_event=None):
+        if concept["concept"] == "success":
+            generated_path.write_bytes(b"image")
+            success_done.set()
+            return {"filepath": str(generated_path), "b64": "image"}
+        await success_done.wait()
+        raise RuntimeError("provider unavailable")
+
+    monkeypatch.setattr(generate, "IMAGE_GENERATION_CONCURRENCY", 2)
+    monkeypatch.setattr(generate, "_generate_with_recovery", fake_generate_with_recovery)
+
+    with pytest.raises(RuntimeError, match="provider unavailable"):
+        asyncio.run(generate.generate_images(concepts))
+
+    assert not generated_path.exists()
+
+
 def test_generate_images_stream_delegates_to_generation_primitive(monkeypatch):
     calls = []
     concepts = [{"concept": "tea", "image_prompt": "cup", "timestamp_seconds": 4}]
@@ -365,7 +381,7 @@ def test_generate_with_recovery_cancels_after_provider_before_analysis(monkeypat
         calls.append("rewrite")
         return SimpleNamespace(revised_prompt="retry", reasoning="reason")
 
-    monkeypatch.setattr(generate, "NUNCHAKU_ENABLE_REWRITE_RECOVERY", True)
+    monkeypatch.setattr(generate, "IMAGE_ENABLE_REWRITE_RECOVERY", True)
     monkeypatch.setattr(generate, "run_in_threadpool", fake_run_in_threadpool)
     monkeypatch.setattr(generate, "analyze_image_handler", fake_analyze)
     monkeypatch.setattr(generate.image_rewriter, "run", fake_rewrite)
@@ -397,7 +413,7 @@ def test_generate_with_recovery_cancels_after_analysis_before_rewriter(monkeypat
         calls.append("rewrite")
         return SimpleNamespace(revised_prompt="retry", reasoning="reason")
 
-    monkeypatch.setattr(generate, "NUNCHAKU_ENABLE_REWRITE_RECOVERY", True)
+    monkeypatch.setattr(generate, "IMAGE_ENABLE_REWRITE_RECOVERY", True)
     monkeypatch.setattr(generate, "run_in_threadpool", fake_run_in_threadpool)
     monkeypatch.setattr(generate, "analyze_image_handler", fake_analyze)
     monkeypatch.setattr(generate.image_rewriter, "run", fake_rewrite)
@@ -552,7 +568,7 @@ def test_cancelled_generation_task_cleans_file_saved_later_by_provider_thread(
 
         await asyncio.wait_for(wait_until_removed(), timeout=0.5)
 
-    monkeypatch.setattr(generate, "NUNCHAKU_ENABLE_REWRITE_RECOVERY", False)
+    monkeypatch.setattr(generate, "IMAGE_ENABLE_REWRITE_RECOVERY", False)
     monkeypatch.setattr(generate, "generate_image", fake_generate_image)
 
     asyncio.run(cancel_during_provider())

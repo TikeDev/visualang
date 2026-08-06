@@ -32,11 +32,12 @@ function formatTime(seconds) {
   return `${minutes}:${remainingSeconds}`
 }
 
-export default function Player({ images, audioSrc, title }) {
+export default function Player({ images, audioSrc, title, onImageError }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [areImagesReady, setAreImagesReady] = useState(false)
+  const [failedImageUrls, setFailedImageUrls] = useState(() => new Set())
   const [isAudioReady, setIsAudioReady] = useState(false)
   const [audioError, setAudioError] = useState('')
   const [isPlaying, setIsPlaying] = useState(false)
@@ -44,12 +45,14 @@ export default function Player({ images, audioSrc, title }) {
   const audioRef = useRef(null)
   const loadedRef = useRef(0)
   const progressValue = duration > 0 ? Math.min(currentTime, duration) : 0
-  const canPlay = areImagesReady && isAudioReady && !audioError
+  const hasUsableImage = images.some(image => !failedImageUrls.has(image.image_url))
+  const canPlay = areImagesReady && isAudioReady && !audioError && hasUsableImage
 
   useEffect(() => {
     loadedRef.current = 0
     setCurrentIndex(0)
     setAreImagesReady(false)
+    setFailedImageUrls(new Set())
     if (images.length === 0) return
 
     images.forEach(image => {
@@ -60,11 +63,13 @@ export default function Player({ images, audioSrc, title }) {
       }
       img.onerror = () => {
         loadedRef.current += 1
+        setFailedImageUrls(previous => new Set(previous).add(image.image_url))
+        onImageError?.(image)
         if (loadedRef.current === images.length) setAreImagesReady(true)
       }
       img.src = image.image_url
     })
-  }, [images])
+  }, [images, onImageError])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -231,7 +236,7 @@ export default function Player({ images, audioSrc, title }) {
             <div className="player-card__controls-main">
               {!canPlay ? (
                 <div className="player-card__loading">
-                  {!audioError && (
+                  {!audioError && hasUsableImage && (
                     <CircleNotch
                       size={22}
                       aria-hidden="true"
@@ -239,10 +244,12 @@ export default function Player({ images, audioSrc, title }) {
                     />
                   )}
                   <span
-                    className={audioError ? 'player-card__error' : undefined}
-                    role={audioError ? 'alert' : undefined}
+                    className={audioError || !hasUsableImage ? 'player-card__error' : undefined}
+                    role={audioError || !hasUsableImage ? 'alert' : undefined}
                   >
-                    {audioError || (!areImagesReady ? 'Loading images...' : 'Loading narration...')}
+                    {!hasUsableImage
+                      ? 'All scene images failed to load.'
+                      : audioError || (!areImagesReady ? 'Loading images...' : 'Loading narration...')}
                   </span>
                 </div>
               ) : (
