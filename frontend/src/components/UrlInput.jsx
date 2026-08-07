@@ -78,53 +78,48 @@ export default function UrlInput({ onSubmit }) {
   const describedBy = [helpId, errorId].filter(Boolean).join(' ')
 
   return (
-    <section className="panel panel--input" aria-labelledby="input-title">
-      <div className="panel__copy">
-        <p className="eyebrow">Language Learning Visual Companion</p>
-        <h1 id="input-title" className="panel__title">
-          Turn a spoken lesson into an illustrated study video.
-        </h1>
-        <p className="panel__description">
-          Paste a YouTube link or upload audio to generate a transcript-driven visual sequence that
-          stays readable and usable across desktop, tablet, and phone layouts.
-        </p>
-      </div>
+    <section className="source" aria-labelledby="input-title">
+      <h1 id="input-title" className="source__title">
+        See what you hear
+      </h1>
+      <p className="source__sub">
+        Paste a YouTube link or upload audio. Visualang illustrates it scene by scene so you can
+        follow along in a new language.
+      </p>
 
-      <form className="panel__form" onSubmit={handleSubmit}>
-        <fieldset className="mode-switcher">
-          <legend className="field-label">Choose your source</legend>
-          <div className="mode-switcher__options">
-            <button
-              type="button"
-              className={`mode-switcher__button ${mode === 'youtube' ? 'is-active' : ''}`}
-              onClick={() => {
-                setMode('youtube')
-                setError('')
-              }}
-              aria-pressed={mode === 'youtube'}
-            >
-              <YoutubeLogo size={20} weight={mode === 'youtube' ? 'fill' : 'regular'} />
-              <span>YouTube URL</span>
-            </button>
-            <button
-              type="button"
-              className={`mode-switcher__button ${mode === 'file' ? 'is-active' : ''}`}
-              onClick={() => {
-                setMode('file')
-                setError('')
-              }}
-              aria-pressed={mode === 'file'}
-            >
-              <UploadSimple size={20} weight={mode === 'file' ? 'fill' : 'regular'} />
-              <span>Upload Audio</span>
-            </button>
-          </div>
+      <form className="card source__card" onSubmit={handleSubmit}>
+        <fieldset className="seg">
+          <legend className="sr-only">Choose your source</legend>
+          <button
+            type="button"
+            className={`seg__btn ${mode === 'youtube' ? 'is-active' : ''}`}
+            onClick={() => {
+              setMode('youtube')
+              setError('')
+            }}
+            aria-pressed={mode === 'youtube'}
+          >
+            <YoutubeLogo size={18} weight={mode === 'youtube' ? 'fill' : 'regular'} />
+            <span>YouTube link</span>
+          </button>
+          <button
+            type="button"
+            className={`seg__btn ${mode === 'file' ? 'is-active' : ''}`}
+            onClick={() => {
+              setMode('file')
+              setError('')
+            }}
+            aria-pressed={mode === 'file'}
+          >
+            <UploadSimple size={18} weight={mode === 'file' ? 'fill' : 'regular'} />
+            <span>Audio file</span>
+          </button>
         </fieldset>
 
         {mode === 'youtube' ? (
           <div className="field-group">
             <label className="field-label" htmlFor="youtube-url">
-              YouTube video or Shorts URL
+              Video URL
             </label>
             <input
               id="youtube-url"
@@ -132,23 +127,23 @@ export default function UrlInput({ onSubmit }) {
               className="text-input"
               type="url"
               inputMode="url"
-              placeholder="https://www.youtube.com/watch?v=... or /shorts/..."
+              placeholder="https://www.youtube.com/watch?v=…"
               value={url}
               onChange={handleUrlChange}
               aria-describedby={describedBy}
               aria-invalid={error ? 'true' : undefined}
             />
             <p id={helpId} className="field-help">
-              Paste the full link to a YouTube video or Shorts clip.
+              Clear spoken audio up to 20 minutes works best.
             </p>
           </div>
         ) : (
           <div className="field-group">
             <span className="field-label" id="audio-upload-label">
-              Audio upload
+              Audio file
             </span>
             <label className="file-picker" htmlFor="audio-file">
-              <UploadSimple size={22} />
+              <UploadSimple size={20} />
               <span>{file ? file.name : 'Choose an audio file to upload'}</span>
             </label>
             <input
@@ -170,17 +165,17 @@ export default function UrlInput({ onSubmit }) {
 
         {error && (
           <p id="source-error" className="field-error" role="alert">
-            <Warning size={18} weight="fill" />
+            <Warning size={16} weight="fill" />
             <span>{error}</span>
           </p>
         )}
 
         <button
           type="submit"
-          className="button button--primary panel__submit"
           disabled={!isValid || isSubmitting}
+          className="button button--primary source__submit"
         >
-          {isSubmitting ? 'Starting...' : 'Generate Illustrated Preview'}
+          {isSubmitting ? 'Starting…' : 'Visualize'}
         </button>
       </form>
     </section>

@@ -1,49 +1,73 @@
 ---
 name: Visualang
-description: A focused lesson studio for turning spoken material into illustrated learning videos.
+description: A focused studio console for turning spoken audio into illustrated, replayable visualizations.
 colors:
-  burnt-clay: "#8f4d32"
-  soft-terracotta: "#b96e4d"
-  library-sage: "#54734f"
-  soft-sage: "#7d9b75"
-  studio-canvas: "#f5f0e8"
-  warm-paper: "#fffaf4"
-  ink-brown: "#251d14"
-  secondary-ink: "#5c4738"
-  night-studio: "#16110d"
-  night-paper: "#2d231c"
-  night-ink: "#f4eadf"
-  signal-red: "#8b2b2b"
+  ultramarine: "#1d2a63"
+  ultramarine-strong: "#16204d"
+  cornflower: "#8fa7ff"
+  cornflower-bright: "#5b7cf0"
+  porcelain: "#f3f4f8"
+  surface-white: "#ffffff"
+  field-white: "#fafafd"
+  ink: "#1a2036"
+  ink-muted: "#5b6178"
+  line: "#e2e4ee"
+  line-strong: "#c9cde0"
+  wash: "#e7ecfa"
+  wash-strong: "#dfe5fa"
+  night: "#12151d"
+  night-surface: "#1a1e29"
+  night-field: "#151924"
+  night-ink: "#e9ebf2"
+  night-ink-muted: "#9aa1b5"
+  night-line: "#272c3a"
+  night-line-strong: "#343b4e"
+  night-wash: "#232d4d"
+  signal-red: "#8f2f2a"
+  signal-red-bg: "#fbe4e2"
+  night-signal-red: "#f2b0aa"
+  night-signal-red-bg: "#46201d"
+  success-green: "#1f6d43"
+  success-green-bg: "#e0f0e7"
+  night-success-green: "#8fd3ae"
+  night-success-green-bg: "#1c3328"
+  warning-bg: "#f7ecd8"
+  night-warning-bg: "#3a2f1c"
+  stage-black: "#0d1016"
 typography:
   display:
-    fontFamily: "Playfair Display, Georgia, serif"
-    fontSize: "clamp(2rem, 3.8vw, 3.45rem)"
+    fontFamily: "Schibsted Grotesk, Helvetica Neue, Arial, sans-serif"
+    fontSize: "1.5rem"
     fontWeight: 600
-    lineHeight: 1.05
+    lineHeight: 1.2
   headline:
-    fontFamily: "Playfair Display, Georgia, serif"
-    fontSize: "1.8rem"
+    fontFamily: "Schibsted Grotesk, Helvetica Neue, Arial, sans-serif"
+    fontSize: "1.25rem"
     fontWeight: 600
-    lineHeight: 1.22
+    lineHeight: 1.25
   title:
-    fontFamily: "Source Serif 4, Georgia, serif"
-    fontSize: "1.15rem"
-    fontWeight: 700
+    fontFamily: "Schibsted Grotesk, Helvetica Neue, Arial, sans-serif"
+    fontSize: "1.125rem"
+    fontWeight: 600
     lineHeight: 1.3
   body:
-    fontFamily: "Source Serif 4, Georgia, serif"
+    fontFamily: "Schibsted Grotesk, Helvetica Neue, Arial, sans-serif"
     fontSize: "1rem"
     fontWeight: 400
     lineHeight: 1.6
   label:
-    fontFamily: "Source Serif 4, Georgia, serif"
-    fontSize: "1rem"
-    fontWeight: 700
+    fontFamily: "Schibsted Grotesk, Helvetica Neue, Arial, sans-serif"
+    fontSize: "0.875rem"
+    fontWeight: 600
+    lineHeight: 1.2
+  caption:
+    fontFamily: "Schibsted Grotesk, Helvetica Neue, Arial, sans-serif"
+    fontSize: "0.75rem"
+    fontWeight: 600
     lineHeight: 1.2
 rounded:
-  field: "16px"
-  context: "18px"
-  panel: "24px"
+  control: "0.5rem"
+  card: "0.75rem"
   pill: "999px"
 spacing:
   xs: "8px"
@@ -53,184 +77,183 @@ spacing:
   xl: "32px"
 components:
   button-primary:
-    backgroundColor: "{colors.burnt-clay}"
-    textColor: "{colors.warm-paper}"
+    backgroundColor: "{colors.ultramarine}"
+    textColor: "{colors.surface-white}"
     typography: "{typography.label}"
-    rounded: "{rounded.pill}"
-    padding: "13.6px 20px"
-    height: "52px"
+    rounded: "{rounded.control}"
+    padding: "11px 22px"
+    height: "44px"
   button-secondary:
-    backgroundColor: "{colors.warm-paper}"
-    textColor: "{colors.ink-brown}"
+    backgroundColor: "{colors.surface-white}"
+    textColor: "{colors.ink}"
     typography: "{typography.label}"
-    rounded: "{rounded.pill}"
-    padding: "13.6px 20px"
-    height: "52px"
+    rounded: "{rounded.control}"
+    padding: "10px 16px"
+    height: "44px"
   text-field:
-    backgroundColor: "{colors.warm-paper}"
-    textColor: "{colors.ink-brown}"
+    backgroundColor: "{colors.field-white}"
+    textColor: "{colors.ink}"
     typography: "{typography.body}"
-    rounded: "{rounded.field}"
-    padding: "14.4px 16px"
-    height: "54px"
-  content-panel:
-    backgroundColor: "{colors.warm-paper}"
-    textColor: "{colors.ink-brown}"
-    rounded: "{rounded.panel}"
-    padding: "clamp(20px, 3vw, 40px)"
+    rounded: "{rounded.control}"
+    padding: "11px 12px"
+    height: "44px"
+  content-card:
+    backgroundColor: "{colors.surface-white}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.card}"
+    padding: "20px 22px"
 ---
 
 # Design System: Visualang
 
 ## Overview
 
-**Creative North Star: "The Illustrated Lesson Studio"**
+**Creative North Star: "The Studio Console"**
 
-Visualang is a focused workspace that turns spoken material into a finished learning artifact. The interface should feel cinematic only when imagery is the subject: the generated preview receives the largest visual field, while source input, progress, export, and download controls remain structured and quiet. This is a product workflow, not a film-marketing page.
+Visualang is a focused console that turns spoken audio into an illustrated, replayable visualization. The chrome is a clean, modern product surface — cool neutrals, a single sans-serif family, one ultramarine accent — so that all warmth and character come from the generated imagery on its dark stage. The tool disappears into the task; the visualization is the star.
 
-The visual language pairs editorial serif type with a restrained clay-and-sage palette. Warmth comes from the imagery, type, and accents rather than from decorative effects. Controls use familiar affordances, status remains legible during long waits, and the interface becomes denser or simpler according to the current stage instead of presenting every function at once.
+The interface has exactly one identity moment: the deep ultramarine top bar that carries the wordmark and the pipeline stepper. Everything below it is quiet porcelain and white. Familiar affordances everywhere; earned familiarity over invention.
 
-The system explicitly rejects generic AI startup styling, chatbot framing, prompt playgrounds, token dashboards, cosmic decoration, and empty SaaS hero compositions. Craft must serve the learning workflow and the exported video.
+The system explicitly rejects the warm-editorial AI formula (cream canvas, serif display, terracotta accents) as well as generic AI startup styling, chatbot framing, glassmorphism, decorative glows, and tracked-uppercase eyebrow labels.
 
 **Key Characteristics:**
 
-- Image-led preview with restrained surrounding chrome
-- Editorial warmth paired with product-level interaction clarity
-- One continuous source-to-download workflow
-- Strong status communication without dashboard noise
-- Light and dark themes that preserve the same semantic hierarchy
+- One committed color: ultramarine chrome on the top bar; restrained everywhere else
+- A single type family (Schibsted Grotesk) across headings, labels, buttons, and data
+- The pipeline stepper (Source → Transcript → Scenes → Video) is the primary status surface
+- The visualization stage is near-black so imagery glows
+- Light and dark themes with identical semantic hierarchy; dark is "Night Cinema"
 
 ## Colors
 
-The palette uses burnt clay for action, library sage for completion, and deep brown neutrals for a warmer alternative to generic gray UI.
-
 ### Primary
 
-- **Burnt Clay** (`burnt-clay`): The accessible primary action, active selection, and light-theme focus color.
-- **Soft Terracotta** (`soft-terracotta`): A supporting atmospheric accent; never a substitute for the stronger action color where contrast matters.
-
-### Secondary
-
-- **Library Sage** (`library-sage`): Completion and positive progress indicators.
-- **Soft Sage** (`soft-sage`): Low-intensity atmospheric support and non-text decoration.
+- **Ultramarine** (`ultramarine`): The single action and identity color in light mode — top bar fill, primary buttons, active states, focus.
+- **Ultramarine Strong** (`ultramarine-strong`): Hover/pressed shade for ultramarine surfaces.
+- **Cornflower** (`cornflower`): Non-text accent on dark grounds — wordmark dot, progress track fill, done-step ticks on the bar.
+- **Cornflower Bright** (`cornflower-bright`): The primary action color in dark mode, where full ultramarine would vanish.
 
 ### Neutral
 
-- **Studio Canvas** (`studio-canvas`): The light-theme page field.
-- **Warm Paper** (`warm-paper`): Primary light surfaces and text over dark media controls.
-- **Ink Brown** (`ink-brown`): Primary light-theme text.
-- **Secondary Ink** (`secondary-ink`): Supporting copy that still meets body-text contrast requirements.
-- **Night Studio** (`night-studio`): The dark-theme page field.
-- **Night Paper** (`night-paper`): Elevated dark-theme surfaces.
-- **Night Ink** (`night-ink`): Primary dark-theme text.
-- **Signal Red** (`signal-red`): Error text and destructive status only.
+- **Porcelain** (`porcelain`): Light-theme page ground — a cool, blue-biased near-white. Never warm-tinted.
+- **Surface White** (`surface-white`): Cards and raised surfaces in light mode.
+- **Field White** (`field-white`): Input fills in light mode.
+- **Ink / Ink Muted** (`ink`, `ink-muted`): Primary and secondary light-theme text.
+- **Line / Line Strong** (`line`, `line-strong`): Hairline and control borders.
+- **Wash / Wash Strong** (`wash`, `wash-strong`): Ultramarine-tinted fills for chips, active steps, and info notices.
+- **Night...** (`night`, `night-surface`, `night-field`, `night-ink`, `night-ink-muted`, `night-line`, `night-line-strong`, `night-wash`): The dark-theme equivalents of the above.
+- **Stage Black** (`stage-black`): The media stage behind imagery in both themes.
+
+### Semantic
+
+- **Signal Red** (`signal-red` / `night-signal-red`, with `-bg` fills): Errors and destructive status only.
+- **Success Green** (`success-green` / `night-success-green`, with `-bg` fills): Completion confirmation only.
+- **Warning** (`warning-bg` / `night-warning-bg`): Cautionary notices, paired with ink text.
 
 ### Named Rules
 
-**The One Action Color Rule.** Burnt Clay identifies primary action, current selection, and focus. It is not page decoration.
+**The One Bar Rule.** Ultramarine may fill exactly one large surface: the top bar. Below it, ultramarine appears only on the current primary action, selection, and focus.
 
-**The Preview Owns the Color Rule.** Generated artwork may be visually rich; surrounding controls stay neutral enough that the lesson remains dominant.
+**The Stage Owns the Warmth Rule.** Generated imagery supplies all warmth and saturation. Chrome neutrals stay cool and quiet so scenes read as the subject.
 
-**The Semantic Pairing Rule.** Error, warning, information, and success states always combine text or iconography with color. Color alone never carries status.
+**The Semantic Pairing Rule.** Error, warning, and success states always pair color with text or iconography. Color alone never carries status.
 
 ## Typography
 
-**Display Font:** Playfair Display (with Georgia and serif fallbacks)  
-**Body Font:** Source Serif 4 (with Georgia and serif fallbacks)
+**Single Family:** Schibsted Grotesk (Helvetica Neue, Arial fallbacks) for every role — headings, body, labels, buttons, and playback data.
 
-**Character:** Playfair gives lesson titles and major stage headings an editorial, story-led voice. Source Serif 4 keeps forms, status, and supporting text readable without introducing a conflicting UI typeface.
+**Character:** A modern grotesque with enough personality to avoid the Inter monoculture, tuned for product UI. No display serif; no second family.
 
 ### Hierarchy
 
-- **Display** (600, `display`, 1.05): One primary stage heading per view; balance wrapping and prevent overflow on narrow screens.
-- **Headline** (600, `headline`, 1.22): Lesson titles and prominent preview context.
-- **Title** (700, `title`, 1.3): Workflow steps, download groups, and compact section names.
-- **Body** (400, `body`, 1.6): Instructions, help, progress detail, and status messaging; prose is capped near 70 characters per line.
-- **Label** (700, `label`, 1.2): Buttons, field labels, selectors, and compact controls. Labels use Source Serif 4, never the display face.
+- **Display** (600, `1.5rem`, 1.2): The single main heading per view.
+- **Headline** (600, `1.25rem`, 1.25): Visualization titles in the preview header.
+- **Title** (600, `1.125rem`, 1.3): Section names and card headings.
+- **Body** (400, `1rem`, 1.6): Instructions, help, status detail; prose capped near 70 characters.
+- **Label** (600, `0.875rem`, 1.2): Buttons, field labels, segmented controls, stepper items.
+- **Caption** (600, `0.75rem`, 1.2): Chips, timecodes, and dense metadata. Timecodes use tabular numerals.
 
 ### Named Rules
 
-**The One Editorial Moment Rule.** Playfair is reserved for the current stage heading or lesson title. Controls, labels, data, and status always use Source Serif 4.
+**The Fixed Ramp Rule.** Product type uses the fixed rem ramp above — no fluid clamp() headings, no sizes off the ramp.
 
-**The Plain Status Rule.** Progress and error language is concise sentence case. Tracked uppercase text is not a default section scaffold.
+**The Plain Status Rule.** Progress and error language is concise sentence case. No tracked-uppercase eyebrows; the only uppercase in the UI is nothing at all.
 
 ## Elevation
 
-The system is flat and tonal by default. Canvas, paper, field, and media layers establish hierarchy before shadows do. A low ambient shadow may separate the main lesson panel from the page, while the preview uses an inset vignette to keep controls legible over imagery. Blur is restricted to media controls where it preserves context; ordinary panels must not become decorative glass cards.
+The system is flat. Hierarchy comes from the cool ground / white card / dark stage layering, hairline borders, and tonal washes — not shadows.
 
 ### Shadow Vocabulary
 
-- **Panel Ambient** (`0 24px 60px -32px var(--color-shadow)`): Main stage separation only; never stack it across nested containers.
-- **Control Lift** (`0 10px 20px -14px rgba(37, 29, 20, 0.45)`): Brief hover feedback on actionable buttons.
-- **Preview Vignette** (`inset 0 0 160px rgba(15, 10, 7, 0.45)`): Media-only contrast support behind overlaid controls.
+- **Control Pop** (`0 1px 2px rgba(13, 16, 22, 0.14)`): Segmented-control active thumb and small raised controls only.
+- **Stage Fade** (`linear-gradient(transparent, rgba(8, 11, 16, 0.86))`): The media-control scrim over the bottom edge of the stage. Media-only.
 
 ### Named Rules
 
-**The Flat Workflow Rule.** Source, progress, and download structures use tonal contrast and dividers first. Shadows are reserved for the primary stage and interaction feedback.
+**The Flat Console Rule.** Cards use border + fill, never border + shadow. No ambient panel shadows, no blur, no glassmorphism anywhere.
 
-**The No Nested Glass Rule.** Never place translucent blurred cards inside another elevated or blurred panel.
+**The No Nested Cards Rule.** A card never contains another bordered card. Internal grouping uses spacing and hairline separators.
 
 ## Components
 
-Components should feel tactile enough to confirm interaction and restrained enough to disappear once the user begins the lesson workflow.
-
 ### Buttons
 
-- **Shape:** Full pill (`pill`) with a minimum 52px target height.
-- **Primary:** Burnt Clay background, Warm Paper text, bold Source Serif label, and 13.6px by 20px padding.
-- **Hover / Focus:** Hover lifts by 1px over 150ms. Focus uses a 3px solid semantic focus ring with a 3px offset. Disabled controls lose lift and use explicit muted foreground and background colors.
-- **Secondary:** Paper-toned surface, Ink Brown text, and a subtle full border; it never competes with the current primary action.
+- **Shape:** `0.5rem` corners, 44px minimum target height, Label typography.
+- **Primary:** Ultramarine fill (Cornflower Bright in dark mode), white text. Hover darkens to Ultramarine Strong over 150ms; no lift, no shadow.
+- **Secondary / Ghost:** White (or `night-surface`) fill, ink text, `line-strong` border.
+- **Focus:** 2px solid focus ring (`ultramarine` light / `cornflower` dark) with 2px offset.
+- **Disabled:** Reduced-contrast fill and text, no pointer affordance, still ≥3:1 against ground.
 
-### Source Mode Control
+### Top Bar
 
-- **Style:** A wrapping set of 52px-high buttons with 16px corners, icon-plus-label content, and clear active fill.
-- **State:** The active option uses Burnt Clay and Warm Paper. Hover changes border emphasis and lifts by 1px; focus follows the global ring.
+- **Style:** Full-width ultramarine fill in light mode; `night` fill with a hairline bottom border in dark mode. Contains the wordmark (text + cornflower dot), the pipeline stepper, and the theme toggle.
+- **Stepper:** Source → Transcript → Scenes → Video as caption-size pills. Current step gets a translucent white wash (light bar) or `night-wash` fill; completed steps get a check and cornflower text; pending steps are bar-muted.
 
-### Cards / Containers
+### Segmented Control (source mode)
 
-- **Corner Style:** Main stage panels use 24px corners on wide screens and approximately 19px on narrow screens. Internal notices and fields use 16px corners.
-- **Background:** Warm Paper in light mode and Night Paper in dark mode.
-- **Shadow Strategy:** Only the principal stage may use Panel Ambient. Internal groups use spacing, separators, or tonal fill.
-- **Border:** One subtle full perimeter border. Colored side stripes are prohibited.
-- **Internal Padding:** 20–40px for a principal panel; 16–20px for notices and internal groups.
+- **Style:** A pill-less `0.5rem` track (`wash`-toned fill) containing equal buttons; the active option is a white (or `night-wash`) thumb with Control Pop shadow.
+
+### Cards
+
+- **Corner Style:** `0.75rem`.
+- **Background:** Surface White / `night-surface` with a `line` border.
+- **Padding:** 20–22px. No shadows, no blur, no accent stripes.
 
 ### Inputs / Fields
 
-- **Style:** 54px minimum height, 16px corners, full subtle border, paper-toned fill, and 14.4px by 16px padding.
-- **Focus:** A 3px semantic ring with 3px offset and a stronger border color.
-- **Error / Disabled:** Error text appears in a filled Signal Red notice with an icon or explicit message. Disabled state remains readable and visibly non-interactive.
-- **File Upload:** A dashed full border is permitted for the drop target; keyboard focus remains visible on the label through `:focus-within`.
+- **Style:** 44px minimum height, `0.5rem` corners, `line-strong` border, `field-white` / `night-field` fill.
+- **Focus:** 2px ring with 2px offset plus border-color shift to the action color.
+- **Error:** A filled Signal Red notice with icon and message below the field.
+- **File Upload:** Dashed `line-strong` border on the drop target; `:focus-within` shows the standard ring.
 
 ### Status Notices
 
-- **Style:** 16px corners, compact 16px padding, subtle full border, and semantic tonal fill.
-- **Behavior:** Errors use `role="alert"`; routine progress uses a polite live region. Dismiss controls inherit the notice color and retain an accessible name.
+- **Style:** `0.5rem` corners, 12–16px padding, semantic tonal fill, no border stripe.
+- **Behavior:** Errors use `role="alert"`; routine progress uses a polite live region.
 
-### Illustrated Preview Player
+### Visualization Stage
 
-- **Composition:** A 16:9 image field dominates the preview state. Playback controls overlay only the lower edge of the image, using a dark tonal fade rather than a separate floating toolbar.
-- **Controls:** Play/pause, timeline, elapsed time, duration, title, and playback speed use familiar media affordances with 44px or larger targets.
-- **Motion:** Scene fades last 800ms. Ken Burns motion follows the duration of each scene and stops under reduced-motion preferences.
-- **Responsive Behavior:** At 672px and below, controls become full-width rows, the timeline stacks, and the lesson title may wrap.
+- **Composition:** A 16:9 Stage Black field dominates the preview. Playback controls overlay only the bottom edge via the Stage Fade scrim.
+- **Controls:** Play/pause, timeline, elapsed/total time, and playback speed with 44px+ targets; timecodes in tabular numerals.
+- **Motion:** Scene crossfades run 400ms; slow Ken Burns drift may follow each scene's duration. Under `prefers-reduced-motion`, drift and spinners stop and crossfades become instant.
 
 ## Do's and Don'ts
 
 ### Do:
 
-- **Do** make the generated preview the largest visual element once imagery is available.
-- **Do** preserve the source, processing, preview, export, and download sequence as one legible workflow.
-- **Do** use Burnt Clay for the single current primary action and Library Sage for completion.
-- **Do** keep body copy near 70 characters per line and maintain WCAG 2.2 AA contrast.
-- **Do** provide visible focus, keyboard operation, text-plus-color status, and reduced-motion behavior.
-- **Do** let dark media controls overlay the preview while keeping ordinary product surfaces mostly flat and tonal.
+- **Do** keep the stepper, status copy, and stage in one legible column — the workflow reads top to bottom.
+- **Do** make the visualization stage the largest element once imagery exists.
+- **Do** give every interactive component default, hover, focus, active, and disabled states.
+- **Do** keep body copy near 70 characters and maintain WCAG 2.2 AA contrast in both themes.
+- **Do** provide a reduced-motion alternative for every animation.
+- **Do** use skeleton or inline progress for waiting states, with concrete stage names.
 
 ### Don't:
 
-- **Don't** use generic AI startup interfaces built around purple gradients, cosmic glows, sparkles, or “magic” language.
-- **Don't** use chatbot, prompt-playground, agent-dashboard, or token-pill interaction models.
-- **Don't** use floating glass cards, empty center-column SaaS heroes, or decorative metrics that obscure the workflow.
-- **Don't** use generic content-generation framing that makes language learning or the exported video feel secondary.
-- **Don't** use noisy progress messaging, low-contrast controls, or motion that competes with the user’s task.
-- **Don't** copy a film-marketing landing page: no full-screen background video, giant slogan, or form floating over unpredictable imagery.
-- **Don't** use colored side-stripe borders, gradient text, nested cards, or border-plus-wide-shadow decoration.
-- **Don't** use Playfair Display for buttons, labels, playback data, or status messages.
+- **Don't** reintroduce the warm-editorial formula: cream grounds, serif display type, terracotta accents, storybook framing.
+- **Don't** use glassmorphism, backdrop blur, ambient panel shadows, radial glows, or gradient text.
+- **Don't** use tracked-uppercase eyebrows or numbered section scaffolding.
+- **Don't** put ultramarine on decoration — it marks the bar, actions, selection, and focus only.
+- **Don't** use purple-gradient AI styling, chatbot framing, token pills, or "magic" language.
+- **Don't** stack shadows with borders, nest cards, or add colored side stripes.
+- **Don't** use any second typeface; Schibsted Grotesk carries everything.

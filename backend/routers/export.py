@@ -259,6 +259,70 @@ def can_crossfade(previous_duration: float, next_duration: float, fade_duration:
     return previous_duration > fade_duration and next_duration > fade_duration
 
 
+def probe_audio_duration(audio_path: str) -> float | None:
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                audio_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return float(result.stdout.strip())
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
+def derive_image_durations(
+    images: list[dict],
+    audio_duration: float | None,
+    fade_duration: float = CROSSFADE_DURATION_SECONDS,
+) -> list[dict]:
+    """Fill in duration_seconds from consecutive timestamp_seconds boundaries.
+
+    Mirrors the frontend Player: image i shows from its timestamp until the
+    next image's timestamp (the first image is pulled back to t=0), and the
+    last image runs to the end of the audio.
+    """
+    if all("duration_seconds" in img for img in images):
+        return images
+    if not all("timestamp_seconds" in img for img in images):
+        return images
+
+    ordered = sorted(images, key=lambda img: img["timestamp_seconds"])
+    boundaries = [0.0] + [float(img["timestamp_seconds"]) for img in ordered[1:]]
+    if audio_duration is not None:
+        boundaries.append(float(audio_duration))
+    else:
+        boundaries.append(
+            float(ordered[-1]["timestamp_seconds"]) + DEFAULT_IMAGE_DURATION_SECONDS
+        )
+
+    durations = [
+        normalize_scene_duration(boundaries[i + 1] - boundaries[i])
+        for i in range(len(ordered))
+    ]
+    # Each xfade shortens the timeline by fade_duration; extend the incoming
+    # scene so every fade completes exactly at that scene's timestamp and the
+    # video track spans the full audio.
+    for i in range(1, len(durations)):
+        if can_crossfade(durations[i - 1], durations[i], fade_duration):
+            durations[i] += fade_duration
+
+    return [
+        {**img, "duration_seconds": duration}
+        for img, duration in zip(ordered, durations)
+    ]
+
+
 def build_transition_plan(
     durations: list[float],
     fade_duration: float = CROSSFADE_DURATION_SECONDS,
@@ -449,6 +513,9 @@ def build_ffmpeg_args(
 async def run_ffmpeg_export(job_id: str, audio_path: str, images: list, output_path: str):
     export_started_at = time.time()
     proc = None
+    if not all("duration_seconds" in img for img in images):
+        audio_duration = await asyncio.to_thread(probe_audio_duration, audio_path)
+        images = derive_image_durations(images, audio_duration)
     expected_duration = total_export_duration(images)
     update_job(
         job_id,

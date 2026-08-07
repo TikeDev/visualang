@@ -14,7 +14,7 @@ if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
 from main import app
-from agents import base, transcript_gate as gate_module
+from agents import base, concept_extractor, transcript_gate as gate_module
 from routers import concepts, transcript
 
 
@@ -649,6 +649,14 @@ def test_concepts_parse_failure_returns_500(monkeypatch):
 
     assert response.status_code == 500
     assert response.json()["detail"] == "Concept extraction failed: malformed JSON from model"
+
+
+def test_format_transcript_renders_segment_windows():
+    formatted = concept_extractor._format_transcript(
+        [{"text": "hola", "start": 42.0, "duration": 15.0}]
+    )
+
+    assert formatted == "[0042s-0057s] hola"
 
 
 def test_media_audio_route_serves_existing_file():

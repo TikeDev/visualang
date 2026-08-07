@@ -1,7 +1,7 @@
 const STAGE_LABELS = {
-  transcript: 'Fetching transcript',
-  concepts: 'Extracting concepts',
-  generating_images: 'Generating images',
+  transcript: 'Reading the transcript',
+  concepts: 'Finding visual moments',
+  generating_images: 'Illustrating scenes',
   export: 'Rendering video',
 }
 
@@ -45,7 +45,7 @@ export function getJobView(job) {
           ? `${stageLabel(job.stage)} failed`
           : status === 'interrupted'
             ? 'Interrupted — your progress is saved'
-            : 'Cancelled — your progress is saved',
+            : 'Stopped — your progress is saved',
       primary: 'retry',
       secondary: 'delete',
       preservePreview: hasCompletedWork(job),
@@ -66,7 +66,7 @@ export function getJobView(job) {
 
   if (status === 'expired') {
     return {
-      label: 'This job has expired',
+      label: 'This visualization has expired',
       primary: null,
       secondary: null,
       preservePreview: false,

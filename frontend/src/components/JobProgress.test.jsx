@@ -15,8 +15,8 @@ describe('JobProgress', () => {
       />
     )
 
-    expect(screen.getByRole('status')).toHaveTextContent('Generating scene 4 of 8')
-    expect(screen.getByRole('button', { name: 'Stop processing' })).toBeEnabled()
+    expect(screen.getByRole('status')).toHaveTextContent('Illustrating scene 4 of 8')
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeEnabled()
   })
 
   it('presents retry and preserved-work copy after cancellation', () => {
@@ -27,8 +27,8 @@ describe('JobProgress', () => {
       />
     )
 
-    expect(screen.getByText('Your completed work is saved.')).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Continue processing' })).toBeEnabled()
+    expect(screen.getByText('Your progress is saved — nothing is lost.')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled()
   })
 
   it('presents retry copy after an interrupted job', () => {
@@ -39,7 +39,7 @@ describe('JobProgress', () => {
       />
     )
 
-    expect(screen.getByRole('button', { name: 'Continue processing' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled()
   })
 
   it('surfaces a sanitized error and a retry action when a stage fails', () => {
@@ -51,7 +51,7 @@ describe('JobProgress', () => {
     )
 
     expect(screen.getByRole('alert')).toHaveTextContent('The job failed.')
-    expect(screen.getByRole('button', { name: 'Continue processing' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled()
   })
 
   it('calls onCancel when the stop action is used', async () => {
@@ -64,7 +64,7 @@ describe('JobProgress', () => {
       />
     )
 
-    await userEvent.click(screen.getByRole('button', { name: 'Stop processing' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Stop' }))
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 })

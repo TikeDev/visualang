@@ -47,18 +47,29 @@ CONCEPT_CRITIQUE_MODEL = HAIKU  # cheap rating pass
 # not the route.
 CONCEPT_EXTRACTOR_SYSTEM = """\
 You are a visual companion generator for language learning videos. Given a
-transcript with timestamps, identify 1 visual concept every 20-30 seconds that
-is concrete and visualizable.
+transcript with timestamped segments ([start-end] in seconds), pick 1 visual
+scene every 10 seconds. Each image illustrates what the narration is
+actually describing during the window it covers — from its timestamp until
+the next concept's timestamp.
 
-For each concept return:
-- timestamp_seconds (integer)
-- concept (the word or phrase in the original language)
+For each scene return:
+- timestamp_seconds (integer — the start of the window this image covers)
+- concept (the key word or phrase in the original language)
 - image_prompt (English image generation prompt)
 
 Rules for image_prompts:
+- Depict the moment being narrated: a full scene with a focal subject
+  performing an action in a setting, drawn from the transcript text in that
+  window — never just one isolated object. Structure each prompt like:
+  "a tiny gnome in a pointed red hat stands at the doorstep of a whimsical
+  pineapple house with carved windows, lush garden with oversized flowers
+  around, soft warm lighting, centered composition"
+- Ground every detail in what the transcript says in that window; do not
+  invent unrelated elements
+- One clear focal subject performing the action; supporting setting details
+  stay in the background
 - Describe only visual elements — no text, signs, labels, letters, or words
   anywhere in the scene
-- Simple composition with one clear primary subject
 - Translate concepts to English even if the transcript is in another language
 - Skip abstract or non-visual moments — pick the next concrete one instead
 - End every prompt with: "children's storybook illustration, simple composition,
@@ -71,7 +82,7 @@ CONCEPT_CRITIQUE_SYSTEM = """\
 You review draft visual concepts for a language-learning pipeline.
 
 For each concept in the draft you'll receive, rate its visualizability 1-5:
-  5 — concrete, single clear subject, easy to illustrate
+  5 — concrete scene, one focal subject with clear action and setting
   3 — visualizable but ambiguous or busy
   1 — abstract, non-visual, or references text/signs
 
@@ -80,7 +91,10 @@ Also flag any image_prompt that:
   "writing", "book page", "screen", "menu" (things that invite text in output)
 - Lacks the required suffix ("children's storybook illustration, simple
   composition, one main subject, soft colors, painterly, no text, no letters")
-- Has more than one primary subject
+- Has more than one focal subject competing for attention (background setting
+  details are fine)
+- Describes only a single isolated object with no action or setting (it should
+  depict the narrated scene)
 
 Return a JSON array, one object per input concept, in the same order:
   { "index": int, "rating": int, "issues": [string, ...] }
@@ -95,7 +109,8 @@ You'll receive the original draft as a JSON array, and a critique JSON array
 with per-concept ratings and issues.
 
 For every concept with rating <= 2 or non-empty issues:
-- Rewrite the image_prompt to be more concrete and visualizable
+- Rewrite the image_prompt as a full scene (focal subject + action + setting)
+  grounded in the transcript text near its timestamp
 - If the concept itself is abstract, replace it with a nearby concrete concept
   from the transcript context
 - Ensure every prompt ends with the required suffix
@@ -124,7 +139,8 @@ You'll receive:
 Rewrite the prompt to:
 - Strip any language that invited the failure (e.g. remove "sign", "book",
   "menu" if text was detected)
-- Simplify composition to one clear subject
+- Keep the scene's subject, action, and setting, but simplify to one focal
+  subject
 - Keep the concept's intent
 - End with: "children's storybook illustration, simple composition, one main
   subject, soft colors, painterly, no text, no letters"

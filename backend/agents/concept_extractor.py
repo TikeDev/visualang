@@ -23,7 +23,8 @@ logger = logging.getLogger(__name__)
 def _format_transcript(transcript: list[dict]) -> str:
     lines = []
     for seg in transcript:
-        lines.append(f"[{int(seg['start']):04d}s] {seg['text']}")
+        end = seg["start"] + seg.get("duration", 0)
+        lines.append(f"[{int(seg['start']):04d}s-{int(end):04d}s] {seg['text']}")
     return "\n".join(lines)
 
 
@@ -37,7 +38,7 @@ async def _extract_node(state: dict) -> str:
         model=prompts.CONCEPT_EXTRACTOR_MODEL,
         system=prompts.CONCEPT_EXTRACTOR_SYSTEM,
         user=user,
-        max_tokens=2000,
+        max_tokens=8000,
     )
     draft = base.parse_json_strict(text)
     if not isinstance(draft, list):
@@ -107,7 +108,7 @@ async def _fix_node(state: dict) -> str:
         model=prompts.CONCEPT_EXTRACTOR_MODEL,
         system=prompts.CONCEPT_FIX_SYSTEM,
         user=user,
-        max_tokens=2000,
+        max_tokens=8000,
     )
     revised = base.parse_json_strict(text)
     if not isinstance(revised, list):

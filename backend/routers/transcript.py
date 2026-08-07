@@ -360,18 +360,22 @@ async def _handle_youtube(video_url: str, cancel_event=None):
 
 
 async def _handle_upload(file: UploadFile, cancel_event=None):
-    logger.info(f"Transcript upload: {file.filename}, size={file.size}")
+    audio_bytes = await file.read()
+    return await _handle_upload_bytes(audio_bytes, file.filename, cancel_event=cancel_event)
 
-    suffix = Path(file.filename or "").suffix.lower()
+
+async def _handle_upload_bytes(audio_bytes: bytes, filename: str | None, cancel_event=None):
+    logger.info(f"Transcript upload: {filename}, size={len(audio_bytes)}")
+
+    suffix = Path(filename or "").suffix.lower()
     if suffix not in ALLOWED_UPLOAD_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {suffix}")
 
-    audio_bytes = await file.read()
     if len(audio_bytes) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=400, detail="File exceeds 25 MB limit.")
 
-    filename = f"{uuid.uuid4()}_{file.filename}"
-    audio_path = IMAGE_DIR / filename
+    saved_filename = f"{uuid.uuid4()}_{filename}"
+    audio_path = IMAGE_DIR / saved_filename
     try:
         audio_path.write_bytes(audio_bytes)
         logger.info(f"Saved upload to: {audio_path}")
@@ -386,7 +390,7 @@ async def _handle_upload(file: UploadFile, cancel_event=None):
         logger.error(f"Transcription failed: {e}")
         raise HTTPException(status_code=500, detail=f"Transcription failed: {e}")
 
-    title = Path(file.filename).stem
+    title = Path(filename).stem
     duration = (normalized[-1]["start"] + normalized[-1]["duration"]) if normalized else 0
     verdict = await transcript_gate.run(normalized, title=title, duration=duration)
     if verdict.verdict == "reject":

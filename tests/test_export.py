@@ -165,6 +165,119 @@ def test_build_ffmpeg_args_produces_non_empty_video(tmp_path):
         _cleanup_paths(image_one, image_two, audio_path, output_path)
 
 
+def test_derive_image_durations_from_timestamps_matches_audio_length():
+    images = [
+        {"timestamp_seconds": 10, "image_url": "/images/a.jpg"},
+        {"timestamp_seconds": 40, "image_url": "/images/b.jpg"},
+        {"timestamp_seconds": 70, "image_url": "/images/c.jpg"},
+    ]
+
+    derived = export.derive_image_durations(images, audio_duration=100.0)
+
+    durations = [img["duration_seconds"] for img in derived]
+    assert durations == [40.0, pytest.approx(30.8), pytest.approx(30.8)]
+    # Each xfade shortens the timeline by fade_duration, so with compensation
+    # every fade completes exactly at its concept timestamp and the video
+    # track spans the full audio.
+    transitions = export.build_transition_plan(durations)
+    assert [t["offset"] for t in transitions] == [
+        pytest.approx(39.2),
+        pytest.approx(69.2),
+    ]
+    assert sum(durations) - sum(t["duration"] for t in transitions) == pytest.approx(
+        100.0
+    )
+
+
+def test_derive_image_durations_passthrough_when_durations_explicit():
+    images = [
+        {"timestamp_seconds": 0, "image_url": "/images/a.jpg", "duration_seconds": 3.0},
+        {"timestamp_seconds": 3, "image_url": "/images/b.jpg", "duration_seconds": 4.0},
+    ]
+
+    assert export.derive_image_durations(images, audio_duration=50.0) is images
+
+
+def test_derive_image_durations_sorts_out_of_order_timestamps():
+    images = [
+        {"timestamp_seconds": 40, "image_url": "/images/b.jpg"},
+        {"timestamp_seconds": 10, "image_url": "/images/a.jpg"},
+    ]
+
+    derived = export.derive_image_durations(images, audio_duration=60.0)
+
+    assert [img["image_url"] for img in derived] == ["/images/a.jpg", "/images/b.jpg"]
+
+
+def test_derive_image_durations_single_image_fills_audio():
+    derived = export.derive_image_durations(
+        [{"timestamp_seconds": 12, "image_url": "/images/a.jpg"}], audio_duration=45.0
+    )
+
+    assert derived[0]["duration_seconds"] == 45.0
+
+
+def test_derive_image_durations_clamps_timestamp_past_audio_end():
+    images = [
+        {"timestamp_seconds": 0, "image_url": "/images/a.jpg"},
+        {"timestamp_seconds": 90, "image_url": "/images/b.jpg"},
+    ]
+
+    derived = export.derive_image_durations(images, audio_duration=80.0)
+
+    assert derived[1]["duration_seconds"] == export.MIN_SCENE_DURATION_SECONDS
+
+
+def test_derive_image_durations_falls_back_to_default_without_audio_duration():
+    images = [
+        {"timestamp_seconds": 0, "image_url": "/images/a.jpg"},
+        {"timestamp_seconds": 20, "image_url": "/images/b.jpg"},
+    ]
+
+    derived = export.derive_image_durations(images, audio_duration=None)
+
+    assert derived[0]["duration_seconds"] == 20.0
+    assert derived[1]["duration_seconds"] == pytest.approx(
+        export.DEFAULT_IMAGE_DURATION_SECONDS + export.CROSSFADE_DURATION_SECONDS
+    )
+
+
+def test_run_ffmpeg_export_derives_durations_for_job_pipeline_images(
+    monkeypatch, tmp_path
+):
+    job_id = "derived-durations-job"
+    export.jobs[job_id] = {"status": "pending", "video_path": None}
+    captured = {}
+
+    monkeypatch.setattr(export, "probe_audio_duration", lambda audio_path: 100.0)
+
+    def fake_build_ffmpeg_args(audio_path, images, output_path):
+        captured["images"] = images
+        return ["visualang-missing-ffmpeg-binary"]
+
+    monkeypatch.setattr(export, "build_ffmpeg_args", fake_build_ffmpeg_args)
+
+    images = [
+        {"timestamp_seconds": 10, "image_url": "/images/a.jpg"},
+        {"timestamp_seconds": 40, "image_url": "/images/b.jpg"},
+        {"timestamp_seconds": 70, "image_url": "/images/c.jpg"},
+    ]
+
+    try:
+        asyncio.run(
+            export.run_ffmpeg_export(
+                job_id, "/tmp/audio.mp3", images, str(tmp_path / "out.mp4")
+            )
+        )
+
+        durations = [img["duration_seconds"] for img in captured["images"]]
+        assert durations == [40.0, pytest.approx(30.8), pytest.approx(30.8)]
+        assert export.jobs[job_id]["expected_duration_seconds"] == pytest.approx(101.6)
+    finally:
+        _cleanup_job_metadata(job_id)
+        _cleanup_paths(export.IMAGE_DIR / f"{job_id}_ffmpeg.stderr.log")
+
+
 def test_start_export_route_accepts_multiple_images_and_writes_zip(monkeypatch):
     image_one = _write_image("route-one.jpg")
     image_two = _write_image("route-two.jpg")

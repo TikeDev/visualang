@@ -16,7 +16,7 @@ from job_runner import JobRunner
 from job_store import JobStore
 from routers import export as export_router
 from routers import generate as generate_router
-from routers.transcript import _handle_upload, _handle_youtube
+from routers.transcript import _handle_upload_bytes, _handle_youtube
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -136,10 +136,12 @@ async def create_job(body: CreateJobRequest):
 async def create_upload_job(file: UploadFile = File(...)):
     store = get_job_store()
     runner = get_job_runner()
-    access = store.create_job({"type": "upload", "filename": file.filename})
+    filename = file.filename
+    audio_bytes = await file.read()
+    access = store.create_job({"type": "upload", "filename": filename})
 
     async def transcript_fn(_source: dict, *, cancel_event=None) -> dict:
-        result = await _handle_upload(file, cancel_event=cancel_event)
+        result = await _handle_upload_bytes(audio_bytes, filename, cancel_event=cancel_event)
         return {
             "transcript": result["transcript"],
             "audio_path": result["audio_path"],
@@ -181,11 +183,21 @@ async def delete_job(resume_token: str):
 
 
 @router.get("/jobs/{resume_token}/video")
-async def download_job_video(resume_token: str):
+async def download_job_video(resume_token: str, inline: bool = False):
     job = require_job_by_token(resume_token)
     video_path = job.get("video_path")
     if job.get("status") != "done" or not video_path or not Path(video_path).is_file():
         raise HTTPException(status_code=404, detail="Video not ready")
+    if inline:
+        return FileResponse(
+            video_path,
+            media_type="video/mp4",
+            headers={
+                "Content-Disposition": "inline",
+                "Cache-Control": "private, max-age=3600",
+                "Referrer-Policy": "no-referrer",
+            },
+        )
     return FileResponse(
         video_path,
         media_type="video/mp4",

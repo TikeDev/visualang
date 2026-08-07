@@ -15,10 +15,10 @@ import {
   retryJob,
 } from './jobApi.js'
 import JobProgress from './components/JobProgress.jsx'
+import Stepper from './components/Stepper.jsx'
 import Player from './components/Player.jsx'
 import UrlInput from './components/UrlInput.jsx'
 
-const LOGO_SRC = new URL('../../logos/Visualang-logo.png', import.meta.url).href
 const THEME_STORAGE_KEY = 'visualang-theme'
 const THEMES = {
   LIGHT: 'light',
@@ -182,7 +182,7 @@ export default function App() {
       setResumeToken(resume_token)
     } catch (err) {
       console.error('[Visualang] Job creation failed:', err)
-      setError(err.message || 'Could not start this job.')
+      setError(err.message || 'Something went wrong starting this visualization. Try again.')
       setIsRestoring(false)
     }
   }
@@ -194,7 +194,7 @@ export default function App() {
       setJob(updated)
     } catch (err) {
       console.error('[Visualang] Cancel failed:', err)
-      setError(err.message || 'Could not cancel this job.')
+      setError(err.message || 'Could not stop this visualization. Try again.')
     }
   }
 
@@ -205,7 +205,7 @@ export default function App() {
       pollJob(resumeToken)
     } catch (err) {
       console.error('[Visualang] Retry failed:', err)
-      setError(err.message || 'Could not retry this job.')
+      setError(err.message || 'Could not continue this visualization. Try again.')
     }
   }
 
@@ -227,33 +227,40 @@ export default function App() {
   const isPausedOrFailed = job && PAUSED_STATUSES.has(job.status)
   const images = normalizeImages(job?.images)
   const hasPreview = Boolean(job && (images.length > 0 || job.status === 'done'))
-  const previewTitle = job?.title || 'Your Visualang preview'
+  const previewTitle = job?.title || 'Your visualization'
   const hasDownloads = job?.status === 'done'
   const audioSrc = job?.audio_url ? toAbsoluteUrl(job.audio_url) : null
   const videoSrc = job?.status === 'done' && resumeToken ? jobVideoStreamUrl(resumeToken) : null
 
   return (
     <div className="app-shell">
-      <header className="app-header">
-        <div className="app-brand" aria-label="Visualang">
-          <img src={LOGO_SRC} alt="Visualang" className="app-brand__image" />
-        </div>
-        <div className="app-header__actions">
+      <header className="topbar">
+        <a className="wordmark" href="/">
+          <img className="wordmark__logo" src="/visualang-logo.png" alt="Visualang" />
+        </a>
+
+        {job && <Stepper job={job} />}
+
+        <div className="topbar__actions">
           <button
             type="button"
-            className="button button--secondary theme-toggle"
+            className="button button--secondary button--bar theme-toggle"
             onClick={toggleTheme}
             aria-pressed={theme === THEMES.DARK}
             aria-label={theme === THEMES.DARK ? 'Switch to light mode' : 'Switch to dark mode'}
             title={theme === THEMES.DARK ? 'Switch to light mode' : 'Switch to dark mode'}
           >
             <span className="theme-toggle__icon" aria-hidden="true">
-              {theme === THEMES.DARK ? <Sun size={24} weight="fill" /> : <Moon size={24} weight="fill" />}
+              {theme === THEMES.DARK ? <Sun size={20} weight="fill" /> : <Moon size={20} weight="fill" />}
             </span>
           </button>
           {job && (
-            <button type="button" className="button button--secondary" onClick={resetToIdle}>
-              Create Another Video
+            <button
+              type="button"
+              className="button button--secondary button--bar"
+              onClick={resetToIdle}
+            >
+              New visualization
             </button>
           )}
         </div>
@@ -273,7 +280,7 @@ export default function App() {
 
         {isRestoring && !job && (
           <div className="notice notice--info" role="status">
-            Setting things up...
+            Setting things up…
           </div>
         )}
 
@@ -292,23 +299,17 @@ export default function App() {
             {job.gate?.reason && <div className="notice notice--warning">{job.gate.reason}</div>}
 
             {hasPreview && (
-              <section className="stage-view" aria-labelledby="preview-title">
-                <div className="stage-view__intro">
-                  <div className="stage-view__copy">
-                    <p className="eyebrow">Story Preview</p>
-                    <h1
-                      id="preview-title"
-                      className="stage-view__title"
-                      ref={previewHeadingRef}
-                      tabIndex="-1"
-                    >
-                      {previewTitle}
-                    </h1>
-                    <p className="stage-view__summary">
-                      Review the illustrated sequence, listen through the narration, and export
-                      the packaged assets when rendering finishes.
-                    </p>
-                  </div>
+              <section className="card preview" aria-labelledby="preview-title">
+                <div className="preview__head">
+                  <h1
+                    id="preview-title"
+                    className="preview__title"
+                    ref={previewHeadingRef}
+                    tabIndex="-1"
+                  >
+                    {previewTitle}
+                  </h1>
+                  {hasDownloads && <span className="chip">Ready</span>}
                 </div>
 
                 {imageLoadError && <div className="notice notice--warning">{imageLoadError}</div>}
@@ -335,34 +336,31 @@ export default function App() {
                 )}
 
                 {hasDownloads && (
-                  <div className="stage-actions-section">
-                    <h2 className="stage-actions__label">Download Files</h2>
-                    <div className="stage-actions" aria-label="Export downloads">
-                      <a
-                        href={jobVideoUrl(resumeToken)}
-                        download="visualang.mp4"
-                        className="button button--primary"
-                      >
-                        <VideoCamera size={20} weight="fill" aria-hidden="true" />
-                        <span>Video</span>
-                      </a>
-                      <a
-                        href={jobTranscriptUrl(resumeToken)}
-                        download="transcript.txt"
-                        className="button button--secondary"
-                      >
-                        <FileText size={20} weight="fill" aria-hidden="true" />
-                        <span>Transcript</span>
-                      </a>
-                      <a
-                        href={jobImagesUrl(resumeToken)}
-                        download="visualang_images.zip"
-                        className="button button--secondary"
-                      >
-                        <ImagesSquare size={20} weight="fill" aria-hidden="true" />
-                        <span>Images</span>
-                      </a>
-                    </div>
+                  <div className="preview__actions" aria-label="Downloads">
+                    <a
+                      href={jobVideoUrl(resumeToken)}
+                      download="visualang.mp4"
+                      className="button button--primary"
+                    >
+                      <VideoCamera size={18} weight="fill" aria-hidden="true" />
+                      <span>Download video</span>
+                    </a>
+                    <a
+                      href={jobTranscriptUrl(resumeToken)}
+                      download="transcript.txt"
+                      className="button button--secondary"
+                    >
+                      <FileText size={18} weight="fill" aria-hidden="true" />
+                      <span>Transcript</span>
+                    </a>
+                    <a
+                      href={jobImagesUrl(resumeToken)}
+                      download="visualang_images.zip"
+                      className="button button--secondary"
+                    >
+                      <ImagesSquare size={18} weight="fill" aria-hidden="true" />
+                      <span>Images</span>
+                    </a>
                   </div>
                 )}
               </section>

@@ -180,7 +180,7 @@ def check_forbidden_handler(*, concepts: list[dict]) -> dict:
 
 CHECK_SPACING_SCHEMA = {
     "name": "check_timestamp_spacing",
-    "description": "Flag timestamp clusters (<15s apart) or gaps (>45s) in the concept list.",
+    "description": "Flag timestamp clusters (<5s apart) or gaps (>20s) in the concept list.",
     "input_schema": {
         "type": "object",
         "properties": {
@@ -197,9 +197,9 @@ def check_spacing_handler(*, timestamps: list[int]) -> dict:
     gaps = []
     for i in range(1, len(sorted_ts)):
         delta = sorted_ts[i] - sorted_ts[i - 1]
-        if delta < 15:
+        if delta < 5:
             clusters.append({"between": [sorted_ts[i - 1], sorted_ts[i]], "delta": delta})
-        elif delta > 45:
+        elif delta > 20:
             gaps.append({"between": [sorted_ts[i - 1], sorted_ts[i]], "delta": delta})
     return {"clusters": clusters, "gaps": gaps}
 
