@@ -44,8 +44,8 @@ export function getJobView(job) {
         status === 'error'
           ? `${stageLabel(job.stage)} failed`
           : status === 'interrupted'
-            ? 'Interrupted — your progress is saved'
-            : 'Stopped — your progress is saved',
+            ? 'Interrupted. Your progress is saved'
+            : 'Stopped. Your progress is saved',
       primary: 'retry',
       secondary: 'delete',
       preservePreview: hasCompletedWork(job),

@@ -236,7 +236,12 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <a className="wordmark" href="/">
-          <img className="wordmark__logo" src="/visualang-logo.png" alt="Visualang" />
+          <img className="wordmark__logo" src="/visualang-icon.png" alt="" />
+          <span className="wordmark__text">
+            <span className="wordmark__text-primary">Visua</span>
+            <span className="wordmark__text-fade">l</span>
+            <span className="wordmark__text-accent">ang</span>
+          </span>
         </a>
 
         {job && <Stepper job={job} />}

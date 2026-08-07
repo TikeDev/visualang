@@ -43,6 +43,8 @@
   --bar-border: rgba(255, 255, 255, 0.28);
   --bar-done: #8fa7ff;
   --bar-focus-ring: #ffffff;
+  --wordmark-primary: #6698e4;
+  --wordmark-accent: #4cd2e6;
 
   --seg-track: #e7ecfa;
   --seg-thumb: #ffffff;
@@ -80,6 +82,8 @@
   --bar-border: #343b4e;
   --bar-done: #8fa7ff;
   --bar-focus-ring: #8fa7ff;
+  --wordmark-primary: #3f7edd;
+  --wordmark-accent: #4cd2e6;
 
   --seg-track: #151924;
   --seg-thumb: #232d4d;
@@ -164,7 +168,7 @@ a {
   align-items: center;
   gap: 0.5rem;
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: -0.01em;
   text-decoration: none;
 }
@@ -173,6 +177,29 @@ a {
   height: 2.5rem;
   width: auto;
   display: block;
+}
+
+.wordmark__text {
+  font-family: 'Poppins', 'Schibsted Grotesk', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 1.5rem;
+  line-height: 1;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.wordmark__text-primary {
+  color: var(--wordmark-primary);
+}
+
+.wordmark__text-fade {
+  background: linear-gradient(180deg, var(--wordmark-primary) 35%, var(--wordmark-accent));
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+.wordmark__text-accent {
+  color: var(--wordmark-accent);
 }
 
 .stepper {
@@ -889,6 +916,10 @@ a {
 
   .wordmark__logo {
     height: 2.25rem;
+  }
+
+  .wordmark__text {
+    font-size: 1.5rem;
   }
 
   .app-main {

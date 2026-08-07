@@ -65,7 +65,7 @@ export default function JobProgress({ job, onCancel, onRetry, onDelete, headingR
             <p className="status-card__note">{view.label}</p>
           )}
           {view.preservePreview && (
-            <p className="status-card__note">Your progress is saved — nothing is lost.</p>
+            <p className="status-card__note">Your progress is saved. Nothing is lost.</p>
           )}
         </>
       )}
