@@ -426,6 +426,7 @@ a {
   gap: 0.625rem;
   font-size: 0.875rem;
   font-weight: 600;
+  cursor: pointer;
 }
 
 .file-picker:focus-within {

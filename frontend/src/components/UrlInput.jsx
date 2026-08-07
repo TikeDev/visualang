@@ -140,7 +140,7 @@ export default function UrlInput({ onSubmit }) {
         ) : (
           <div className="field-group">
             <span className="field-label" id="audio-upload-label">
-              Audio file
+              Audio File
             </span>
             <label className="file-picker" htmlFor="audio-file">
               <UploadSimple size={20} />
