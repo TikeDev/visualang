@@ -45,12 +45,18 @@ describe('JobProgress', () => {
   it('surfaces a sanitized error and a retry action when a stage fails', () => {
     render(
       <JobProgress
-        job={{ status: 'error', stage: 'export', error: 'The job failed.' }}
+        job={{
+          status: 'error',
+          stage: 'export',
+          error: 'Rendering video failed: FFmpeg could not create the video file.',
+        }}
         onRetry={vi.fn()}
       />
     )
 
-    expect(screen.getByRole('alert')).toHaveTextContent('The job failed.')
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Rendering video failed: FFmpeg could not create the video file.'
+    )
     expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled()
   })
 

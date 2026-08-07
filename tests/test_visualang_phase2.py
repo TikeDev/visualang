@@ -97,6 +97,13 @@ def test_extract_video_id_supports_watch_short_and_share_urls():
     )
 
 
+def test_is_youtube_short_url_only_matches_individual_shorts():
+    assert transcript.is_youtube_short_url("https://www.youtube.com/shorts/abc123")
+    assert transcript.is_youtube_short_url("https://m.youtube.com/shorts/abc123?feature=share")
+    assert not transcript.is_youtube_short_url("https://www.youtube.com/watch?v=abc123")
+    assert not transcript.is_youtube_short_url("https://www.youtube.com/@creator/shorts")
+
+
 def test_transcript_youtube_unified_success(monkeypatch):
     monkeypatch.setattr(
         transcript,
@@ -146,25 +153,22 @@ def test_transcript_youtube_unified_success(monkeypatch):
 
 
 def test_transcript_youtube_shorts_success(monkeypatch):
+    calls = []
+    monkeypatch.setattr(transcript, "get_video_info", lambda url: {"title": "Short Lesson", "duration": 18})
+    monkeypatch.setattr(transcript, "extract_audio", lambda video_url, output_base: calls.append("audio"))
     monkeypatch.setattr(
         transcript,
-        "YouTubeTranscriptApi",
-        lambda **kwargs: FakeYouTubeTranscriptApi(
-            [
-                FakeCaptionTrack(
-                    language_code="es",
-                    language="Spanish",
-                    is_generated=False,
-                    segments=[
-                        {"text": "buenas", "start": 0.0, "duration": 0.8},
-                        {"text": "tardes", "start": 0.8, "duration": 0.9},
-                    ],
-                )
-            ]
-        ),
+        "transcribe_audio",
+        lambda audio_path: calls.append("whisper") or [
+            {"text": "buenas", "start": 0.0, "duration": 0.8},
+            {"text": "tardes", "start": 0.8, "duration": 0.9},
+        ],
     )
-    monkeypatch.setattr(transcript, "get_video_info", lambda url: {"title": "Short Lesson", "duration": 18})
-    monkeypatch.setattr(transcript, "extract_audio", lambda video_url, output_base: None)
+    monkeypatch.setattr(
+        transcript,
+        "fetch_youtube_captions",
+        lambda video_id: calls.append("captions"),
+    )
 
     async def fake_gate_run(normalized, *, title, duration):
         assert title == "Short Lesson"
@@ -182,6 +186,86 @@ def test_transcript_youtube_shorts_success(monkeypatch):
     ]
     assert response.json()["audio_path"] == str(transcript.IMAGE_DIR / "abc123.mp3")
     assert response.json()["audio_url"] == "/media/audio/abc123.mp3"
+    assert calls == ["audio", "whisper"]
+
+
+def test_transcript_youtube_shorts_falls_back_to_captions_then_extracts_export_audio(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(transcript, "get_video_info", lambda url: {"title": "Short Lesson", "duration": 18})
+
+    def extract_audio(video_url, output_base):
+        calls.append("audio")
+        if len(calls) == 1:
+            raise RuntimeError("short audio unavailable")
+
+    monkeypatch.setattr(transcript, "extract_audio", extract_audio)
+    monkeypatch.setattr(transcript, "transcribe_audio", lambda audio_path: calls.append("whisper"))
+    monkeypatch.setattr(
+        transcript,
+        "fetch_youtube_captions",
+        lambda video_id: calls.append("captions") or [
+            {"text": "buenas", "start": 0.0, "duration": 0.8},
+        ],
+    )
+
+    async def fake_gate_run(normalized, *, title, duration):
+        return _gate_result()
+
+    monkeypatch.setattr(transcript.transcript_gate, "run", fake_gate_run)
+
+    response = client.post("/transcript", json={"video_url": "https://www.youtube.com/shorts/abc123"})
+
+    assert response.status_code == 200
+    assert response.json()["transcript"] == [
+        {"text": "buenas", "start": 0.0, "duration": 0.8},
+    ]
+    assert calls == ["audio", "captions", "audio"]
+
+
+def test_transcript_youtube_shorts_honors_cancellation_before_whisper(monkeypatch):
+    cancel_event = threading.Event()
+    calls = []
+
+    monkeypatch.setattr(transcript, "get_video_info", lambda url: {"title": "Short Lesson", "duration": 18})
+
+    def extract_audio(video_url, output_base):
+        calls.append("audio")
+        cancel_event.set()
+
+    monkeypatch.setattr(transcript, "extract_audio", extract_audio)
+    monkeypatch.setattr(transcript, "transcribe_audio", lambda audio_path: calls.append("whisper"))
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(
+            transcript._handle_youtube(
+                "https://www.youtube.com/shorts/abc123",
+                cancel_event=cancel_event,
+            )
+        )
+
+    assert calls == ["audio"]
+
+
+def test_transcript_youtube_shorts_reports_when_audio_and_captions_fail(monkeypatch):
+    monkeypatch.setattr(transcript, "get_video_info", lambda url: {"title": "Short Lesson", "duration": 18})
+    monkeypatch.setattr(
+        transcript,
+        "extract_audio",
+        lambda video_url, output_base: (_ for _ in ()).throw(RuntimeError("audio blocked")),
+    )
+    monkeypatch.setattr(
+        transcript,
+        "fetch_youtube_captions",
+        lambda video_id: (_ for _ in ()).throw(RuntimeError("captions blocked")),
+    )
+
+    response = client.post("/transcript", json={"video_url": "https://www.youtube.com/shorts/abc123"})
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == (
+        "Failed to fetch transcript. Shorts audio and captions unavailable."
+    )
 
 
 def test_transcript_upload_unified_success(monkeypatch):

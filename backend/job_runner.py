@@ -81,7 +81,7 @@ class JobRunner:
             self._tasks[job_id] = current
 
         try:
-            self.store.update(job_id, status="running")
+            self.store.update(job_id, status="running", error=None)
             job = self._job_row(job_id)
 
             stage_index = _STAGE_INDEX[start_stage]

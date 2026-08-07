@@ -37,7 +37,7 @@ export default function JobProgress({ job, onCancel, onRetry, onDelete, headingR
         </p>
 
         <p className="status-card__note">
-          This keeps working even if you close the tab — your link will bring you back.
+          This keeps working even if you close the tab. Your link will bring you back.
         </p>
 
         <div className="status-card__actions">

@@ -120,6 +120,25 @@ def test_failed_stage_persists_error_and_status(tmp_path):
     assert "boom" in job["error"]
 
 
+def test_retry_clears_previous_error_before_running_stage(tmp_path):
+    store = JobStore(tmp_path)
+    access = store.create_job(YOUTUBE_SOURCE)
+    store.update(
+        access.job_id,
+        status="error",
+        stage="concepts",
+        error="old failure",
+        transcript=[{"text": "hola", "start": 0, "duration": 1}],
+    )
+
+    runner = make_runner(store, [])
+    asyncio.run(runner.retry(access.job_id))
+    job = store.require_by_resume_token(access.resume_token)
+
+    assert job["status"] == "done"
+    assert job["error"] is None
+
+
 def test_cancel_preserves_completed_artifacts(tmp_path):
     store = JobStore(tmp_path)
     access = store.create_job(YOUTUBE_SOURCE)
@@ -354,6 +373,43 @@ def test_job_response_never_exposes_filesystem_paths(job_test_client):
 
     assert "/var/data" not in str(body)
     assert "video_path" not in body
+
+
+def test_job_response_explains_failed_stage_without_exposing_raw_error(job_test_client):
+    client, store, calls = job_test_client
+
+    access = store.create_job(YOUTUBE_SOURCE)
+    store.update(
+        access.job_id,
+        status="error",
+        stage="export",
+        error="FFmpeg failed while reading /var/data/jobs/secret/video.mp4: permission denied",
+    )
+
+    body = client.get(f"/jobs/{access.resume_token}").json()
+
+    assert body["error"] == (
+        "Rendering video failed: FFmpeg failed while reading [internal path]: permission denied"
+    )
+    assert "/var/data" not in body["error"]
+
+
+def test_job_response_redacts_credentials_from_failure_reason(job_test_client):
+    client, store, calls = job_test_client
+    access = store.create_job(YOUTUBE_SOURCE)
+    store.update(
+        access.job_id,
+        status="error",
+        stage="generating_images",
+        error="Provider rejected request with api_key=sk-secret-value",
+    )
+
+    body = client.get(f"/jobs/{access.resume_token}").json()
+
+    assert body["error"] == (
+        "Illustrating scenes failed: Provider rejected request with [credential redacted]"
+    )
+    assert "sk-secret-value" not in body["error"]
 
 
 def test_download_job_video_inline_and_attachment(job_test_client, tmp_path):

@@ -202,6 +202,15 @@ def extract_video_id(url: str) -> str:
     raise ValueError(f"Could not extract video ID from URL: {url}")
 
 
+def is_youtube_short_url(url: str) -> bool:
+    parsed = urlparse(url)
+    host = (parsed.netloc or "").lower()
+    return (
+        (host == "youtube.com" or host.endswith(".youtube.com"))
+        and re.match(r"^/shorts/[^/?]+", parsed.path or "") is not None
+    )
+
+
 def build_audio_url(audio_path: str) -> str:
     return f"/media/audio/{Path(audio_path).name}"
 
@@ -286,43 +295,79 @@ async def _handle_youtube(video_url: str, cancel_event=None):
     audio_base = str(IMAGE_DIR / video_id)
     audio_path = build_youtube_audio_path(video_id)
     audio_ready = False
+    is_short = is_youtube_short_url(video_url)
 
     _raise_if_cancelled(cancel_event)
-    try:
-        normalized = await asyncio.to_thread(fetch_youtube_captions, video_id)
-    except Exception as e:
-        logger.warning(
-            "Transcript fetch failed for %s over %s; falling back to Whisper transcription: %s",
-            video_id,
-            get_proxy_connection_label(),
-            e,
-        )
-        _raise_if_cancelled(cancel_event)
+    normalized = None
+    if is_short:
+        logger.info("Shorts ingestion using audio-first path for %s", video_id)
         try:
             await asyncio.to_thread(extract_audio, video_url, audio_base)
             audio_ready = True
-            logger.info(f"Audio extracted to: {audio_path}")
+            _raise_if_cancelled(cancel_event)
+            normalized = await asyncio.to_thread(transcribe_audio, audio_path)
+            logger.info("Shorts audio-first transcription succeeded: %s segments", len(normalized))
         except Exception as audio_error:
-            logger.error(
-                "Audio extraction failed during transcript fallback over %s: %s",
+            audio_ready = False
+            logger.warning(
+                "Shorts audio-first path failed over %s; trying captions: %s",
                 get_proxy_connection_label(),
                 audio_error,
             )
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to fetch transcript. Audio extraction fallback failed.",
-            )
 
-        _raise_if_cancelled(cancel_event)
+        if normalized is None:
+            _raise_if_cancelled(cancel_event)
+            try:
+                normalized = await asyncio.to_thread(fetch_youtube_captions, video_id)
+                logger.info("Shorts caption fallback succeeded: %s segments", len(normalized))
+            except Exception as caption_error:
+                logger.error(
+                    "Shorts audio and caption paths failed over %s: %s",
+                    get_proxy_connection_label(),
+                    caption_error,
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to fetch transcript. Shorts audio and captions unavailable.",
+                )
+    else:
         try:
-            normalized = await asyncio.to_thread(transcribe_audio, audio_path)
-            logger.info("Transcribed fallback audio: %s segments", len(normalized))
-        except Exception as transcription_error:
-            logger.error("Whisper fallback failed for %s: %s", video_id, transcription_error)
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to fetch transcript. Transcription fallback failed.",
+            normalized = await asyncio.to_thread(fetch_youtube_captions, video_id)
+        except Exception as e:
+            logger.warning(
+                "Transcript fetch failed for %s over %s; falling back to Whisper transcription: %s",
+                video_id,
+                get_proxy_connection_label(),
+                e,
             )
+            _raise_if_cancelled(cancel_event)
+            try:
+                await asyncio.to_thread(extract_audio, video_url, audio_base)
+                audio_ready = True
+                logger.info(f"Audio extracted to: {audio_path}")
+            except Exception as audio_error:
+                logger.error(
+                    "Audio extraction failed during transcript fallback over %s: %s",
+                    get_proxy_connection_label(),
+                    audio_error,
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to fetch transcript. Audio extraction fallback failed.",
+                )
+
+            _raise_if_cancelled(cancel_event)
+            try:
+                normalized = await asyncio.to_thread(transcribe_audio, audio_path)
+                logger.info("Transcribed fallback audio: %s segments", len(normalized))
+            except Exception as transcription_error:
+                logger.error("Whisper fallback failed for %s: %s", video_id, transcription_error)
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to fetch transcript. Transcription fallback failed.",
+                )
+
+    _raise_if_cancelled(cancel_event)
 
     # Prefer yt-dlp duration; fall back to last segment end time.
     if info and info.get("duration"):

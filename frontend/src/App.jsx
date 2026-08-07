@@ -247,6 +247,15 @@ export default function App() {
         {job && <Stepper job={job} />}
 
         <div className="topbar__actions">
+          {job && (
+            <button
+              type="button"
+              className="button button--secondary button--bar"
+              onClick={resetToIdle}
+            >
+              New Visualization
+            </button>
+          )}
           <button
             type="button"
             className="button button--secondary button--bar theme-toggle"
@@ -259,15 +268,6 @@ export default function App() {
               {theme === THEMES.DARK ? <Sun size={20} weight="fill" /> : <Moon size={20} weight="fill" />}
             </span>
           </button>
-          {job && (
-            <button
-              type="button"
-              className="button button--secondary button--bar"
-              onClick={resetToIdle}
-            >
-              New visualization
-            </button>
-          )}
         </div>
       </header>
 

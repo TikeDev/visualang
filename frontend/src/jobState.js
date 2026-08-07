@@ -22,7 +22,7 @@ export function getJobView(job) {
 
   if (status === 'queued') {
     return {
-      label: `Queued — ${stageLabel(job.stage)}`,
+      label: `Queued - ${stageLabel(job.stage)}`,
       primary: null,
       secondary: 'cancel',
       preservePreview: hasCompletedWork(job),

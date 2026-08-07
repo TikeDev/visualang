@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import io
 import logging
+import re
 import zipfile
 from pathlib import Path
 
@@ -39,6 +40,31 @@ _PRIVATE_FIELDS = frozenset(
         "audio_path",
     }
 )
+
+_PUBLIC_STAGE_LABELS = {
+    "transcript": "Reading the transcript",
+    "concepts": "Finding visual moments",
+    "generating_images": "Illustrating scenes",
+    "export": "Rendering video",
+}
+_INTERNAL_PATH_PATTERN = re.compile(
+    r"(?:[A-Za-z]:[\\/]|/)(?:[^\s:'\"]+[\\/])+[^\s:'\"]*"
+)
+_CREDENTIAL_PATTERN = re.compile(
+    r"(?i)\b(?:api[_ -]?key|token|secret|password|authorization)\b\s*[:=]\s*[^\s,;]+"
+)
+_BEARER_PATTERN = re.compile(r"(?i)\bbearer\s+[^\s,;]+")
+
+
+def _public_error(stage: str | None, error: object) -> str:
+    stage_label = _PUBLIC_STAGE_LABELS.get(stage or "", "Processing")
+    detail = " ".join(str(error or "Something went wrong.").split())
+    detail = _INTERNAL_PATH_PATTERN.sub("[internal path]", detail)
+    detail = _CREDENTIAL_PATTERN.sub("[credential redacted]", detail)
+    detail = _BEARER_PATTERN.sub("[credential redacted]", detail)
+    if len(detail) > 240:
+        detail = f"{detail[:237].rstrip()}..."
+    return f"{stage_label} failed: {detail}"
 
 _store: JobStore | None = None
 _runner: JobRunner | None = None
@@ -101,7 +127,7 @@ def sanitize_job(job: dict) -> dict:
     public = {key: value for key, value in job.items() if key not in _PRIVATE_FIELDS}
     public.pop("source", None)
     if public.get("error"):
-        public["error"] = "The job failed. You can retry from the failed stage."
+        public["error"] = _public_error(public.get("stage"), public["error"])
     return public
 
 
