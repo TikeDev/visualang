@@ -1,13 +1,15 @@
 const DISPLAY_STAGES = [
+  { key: 'source', label: 'Source' },
   { key: 'transcript', label: 'Transcript' },
   { key: 'scenes', label: 'Scenes' },
   { key: 'export', label: 'Video' },
 ]
 
 function currentDisplayIndex(job) {
-  if (job.status === 'done') return 2
-  if (job.stage === 'export') return 2
-  if (job.stage === 'concepts' || job.stage === 'generating_images') return 1
+  if (job.status === 'done') return 3
+  if (job.stage === 'export') return 3
+  if (job.stage === 'concepts' || job.stage === 'generating_images') return 2
+  if (job.stage === 'transcript') return 1
   return 0
 }
 
@@ -27,10 +29,11 @@ export default function Stepper({ job }) {
             className={`stepper__step ${state === 'current' ? 'is-current' : ''} ${
               state === 'complete' ? 'is-complete' : ''
             }`}
+            data-state={state}
             aria-current={state === 'current' ? 'step' : undefined}
           >
-            {stage.label}
-            {state === 'complete' ? ' ✓' : ''}
+            <span className="stepper__node" aria-hidden="true" />
+            <span className="stepper__label">{stage.label}</span>
           </li>
         )
       })}
