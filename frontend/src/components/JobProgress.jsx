@@ -2,10 +2,10 @@ import { CircleNotch, Warning } from '@phosphor-icons/react'
 import { getJobView } from '../jobState.js'
 
 const STAGE_STEP_LABELS = {
-  transcript: 'Reading the transcript',
-  concepts: 'Finding visual moments',
-  generating_images: 'Illustrating scenes',
-  export: 'Rendering video',
+  transcript: 'Reading The Transcript',
+  concepts: 'Finding Visual Moments',
+  generating_images: 'Illustrating Scenes',
+  export: 'Rendering Video',
 }
 
 function progressLabel(job) {
