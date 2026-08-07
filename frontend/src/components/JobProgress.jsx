@@ -26,7 +26,7 @@ export default function JobProgress({ job, onCancel, onRetry, onDelete, headingR
     return (
       <section className="card status-card" aria-labelledby="job-progress-title">
         <h1 id="job-progress-title" className="status-card__title" ref={headingRef} tabIndex="-1">
-          Visualizing your source
+          Visualizing Your Source
         </h1>
 
         {job.title && <p className="status-card__source">{job.title}</p>}

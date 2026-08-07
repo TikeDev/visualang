@@ -80,7 +80,7 @@ export default function UrlInput({ onSubmit }) {
   return (
     <section className="source" aria-labelledby="input-title">
       <h1 id="input-title" className="source__title">
-        See what you hear
+        See What You Hear
       </h1>
       <p className="source__sub">
         Paste a YouTube link or upload audio. Visualang illustrates it scene by scene so you can
@@ -100,7 +100,7 @@ export default function UrlInput({ onSubmit }) {
             aria-pressed={mode === 'youtube'}
           >
             <YoutubeLogo size={18} weight={mode === 'youtube' ? 'fill' : 'regular'} />
-            <span>YouTube link</span>
+            <span>YouTube Link</span>
           </button>
           <button
             type="button"
@@ -112,7 +112,7 @@ export default function UrlInput({ onSubmit }) {
             aria-pressed={mode === 'file'}
           >
             <UploadSimple size={18} weight={mode === 'file' ? 'fill' : 'regular'} />
-            <span>Audio file</span>
+            <span>Audio File</span>
           </button>
         </fieldset>
 

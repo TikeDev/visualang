@@ -66,6 +66,7 @@ def _public_error(stage: str | None, error: object) -> str:
         detail = f"{detail[:237].rstrip()}..."
     return f"{stage_label} failed: {detail}"
 
+
 _store: JobStore | None = None
 _runner: JobRunner | None = None
 
