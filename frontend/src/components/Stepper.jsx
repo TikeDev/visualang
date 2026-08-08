@@ -1,3 +1,5 @@
+import { Check } from '@phosphor-icons/react'
+
 const DISPLAY_STAGES = [
   { key: 'source', label: 'Source' },
   { key: 'transcript', label: 'Transcript' },
@@ -32,8 +34,13 @@ export default function Stepper({ job }) {
             data-state={state}
             aria-current={state === 'current' ? 'step' : undefined}
           >
-            <span className="stepper__node" aria-hidden="true" />
+            <span className="stepper__node" aria-hidden="true">
+              {state === 'complete' && <Check size={10} weight="bold" />}
+            </span>
             <span className="stepper__label">{stage.label}</span>
+            {index < DISPLAY_STAGES.length - 1 && (
+              <span className="stepper__connector" aria-hidden="true" />
+            )}
           </li>
         )
       })}
