@@ -227,7 +227,7 @@ export default function App() {
   const isPausedOrFailed = job && PAUSED_STATUSES.has(job.status)
   const images = normalizeImages(job?.images)
   const hasPreview = Boolean(job && (images.length > 0 || job.status === 'done'))
-  const previewTitle = job?.title || 'Your visualization'
+  const previewTitle = job?.title || 'Your Visualization'
   const hasDownloads = job?.status === 'done'
   const audioSrc = job?.audio_url ? toAbsoluteUrl(job.audio_url) : null
   const videoSrc = job?.status === 'done' && resumeToken ? jobVideoStreamUrl(resumeToken) : null
@@ -315,7 +315,7 @@ export default function App() {
                   >
                     {previewTitle}
                   </h1>
-                  {hasDownloads && <span className="chip">Ready</span>}
+
                 </div>
 
                 {imageLoadError && <div className="notice notice--warning">{imageLoadError}</div>}

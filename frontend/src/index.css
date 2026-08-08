@@ -14,8 +14,8 @@
   --color-line-strong: #c9cde0;
   --color-wash: #e7ecfa;
   --color-wash-strong: #dfe5fa;
-  --color-action: #0f386e;
-  --color-action-strong: #0a2c5c;
+  --color-action: #2f6fa8;
+  --color-action-strong: #235a89;
   --color-on-action: #ffffff;
   --color-accent: #179bb7;
   --color-error: #8f2f2a;
@@ -24,7 +24,7 @@
   --color-success-bg: #e0f0e7;
   --color-warning-bg: #f7ecd8;
   --color-stage: #0d1016;
-  --color-focus-ring: #0f386e;
+  --color-focus-ring: #2f6fa8;
 
   /* A small, shared rhythm keeps the workflow readable without making every
      component feel equally padded. */
@@ -35,14 +35,14 @@
   --space-xl: 2rem;
   --space-2xl: 3rem;
 
-  --bar-bg: #0f386e;
-  --bar-ink: #ffffff;
-  --bar-muted: rgba(255, 255, 255, 0.62);
-  --bar-line: transparent;
-  --bar-wash: rgba(255, 255, 255, 0.16);
-  --bar-border: rgba(255, 255, 255, 0.28);
+  --bar-bg: #dde8f5;
+  --bar-ink: #1a2036;
+  --bar-muted: rgba(26, 32, 54, 0.62);
+  --bar-line: #c3d3e8;
+  --bar-wash: rgba(15, 56, 110, 0.1);
+  --bar-border: rgba(15, 56, 110, 0.28);
   --bar-done: var(--color-action);
-  --bar-focus-ring: #ffffff;
+  --bar-focus-ring: #0f386e;
   --wordmark-primary: #2f6fa8;
   --wordmark-accent: #179bb7;
 
@@ -582,13 +582,13 @@ a {
 .new-visualization-button {
   padding-inline: 1rem;
   font-size: .9rem;
-  background: rgba(143, 167, 255, 0.22);
-  color: #dbe3ff;
-  border-color: rgba(143, 167, 255, 0.4);
+  background: var(--bar-wash);
+  color: var(--bar-ink);
+  border-color: var(--bar-border);
 }
 
 .new-visualization-button:hover:not(:disabled) {
-  background: rgba(143, 167, 255, 0.32);
+  background: var(--bar-border);
 }
 
 /* Notices */
