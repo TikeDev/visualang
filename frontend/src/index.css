@@ -14,17 +14,17 @@
   --color-line-strong: #c9cde0;
   --color-wash: #e7ecfa;
   --color-wash-strong: #dfe5fa;
-  --color-action: #1d2a63;
-  --color-action-strong: #16204d;
+  --color-action: #0f386e;
+  --color-action-strong: #0a2c5c;
   --color-on-action: #ffffff;
-  --color-accent: #8fa7ff;
+  --color-accent: #179bb7;
   --color-error: #8f2f2a;
   --color-error-bg: #fbe4e2;
   --color-success: #1f6d43;
   --color-success-bg: #e0f0e7;
   --color-warning-bg: #f7ecd8;
   --color-stage: #0d1016;
-  --color-focus-ring: #1d2a63;
+  --color-focus-ring: #0f386e;
 
   /* A small, shared rhythm keeps the workflow readable without making every
      component feel equally padded. */
@@ -35,16 +35,16 @@
   --space-xl: 2rem;
   --space-2xl: 3rem;
 
-  --bar-bg: #1d2a63;
+  --bar-bg: #0f386e;
   --bar-ink: #ffffff;
   --bar-muted: rgba(255, 255, 255, 0.62);
   --bar-line: transparent;
   --bar-wash: rgba(255, 255, 255, 0.16);
   --bar-border: rgba(255, 255, 255, 0.28);
-  --bar-done: #8fa7ff;
+  --bar-done: var(--color-action);
   --bar-focus-ring: #ffffff;
-  --wordmark-primary: #6698e4;
-  --wordmark-accent: #4cd2e6;
+  --wordmark-primary: #2f6fa8;
+  --wordmark-accent: #179bb7;
 
   --seg-track: #e7ecfa;
   --seg-thumb: #ffffff;
@@ -63,16 +63,16 @@
   --color-line-strong: #343b4e;
   --color-wash: #232d4d;
   --color-wash-strong: #232d4d;
-  --color-action: #5b7cf0;
-  --color-action-strong: #16204d;
+  --color-action: #5b8ce0;
+  --color-action-strong: #3f6fb0;
   --color-on-action: #ffffff;
-  --color-accent: #8fa7ff;
+  --color-accent: #29b6d6;
   --color-error: #f2b0aa;
   --color-error-bg: #46201d;
   --color-success: #8fd3ae;
   --color-success-bg: #1c3328;
   --color-warning-bg: #3a2f1c;
-  --color-focus-ring: #8fa7ff;
+  --color-focus-ring: #29b6d6;
 
   --bar-bg: #12151d;
   --bar-ink: #e9ebf2;
@@ -80,10 +80,10 @@
   --bar-line: #272c3a;
   --bar-wash: #232d4d;
   --bar-border: #343b4e;
-  --bar-done: #8fa7ff;
-  --bar-focus-ring: #8fa7ff;
-  --wordmark-primary: #3f7edd;
-  --wordmark-accent: #4cd2e6;
+  --bar-done: var(--color-action);
+  --bar-focus-ring: #29b6d6;
+  --wordmark-primary: #4a8fd0;
+  --wordmark-accent: #29b6d6;
 
   --seg-track: #151924;
   --seg-thumb: #232d4d;
@@ -157,8 +157,8 @@ a {
   justify-content: center;
   gap: var(--space-sm) var(--space-lg);
   flex-wrap: wrap;
-  min-height: 4rem;
-  padding: 0.625rem clamp(1rem, 3vw, 2rem);
+  min-height: 4.35rem;
+  padding: 1rem clamp(1rem, 3vw, 2rem);
   background: var(--bar-bg);
   color: var(--bar-ink);
   border-bottom: 1px solid var(--bar-line);
@@ -250,7 +250,8 @@ a {
   transition: background 0.3s ease;
 }
 
-.stepper__step.is-complete .stepper__connector {
+.stepper__step.is-complete .stepper__connector,
+.stepper__step.is-current .stepper__connector {
   background: var(--bar-done);
 }
 
@@ -1055,7 +1056,7 @@ a {
    Keep the first-use workflow in view without shrinking touch targets. */
 @media (min-width: 43rem) and (max-height: 52rem) {
   .topbar {
-    padding-block: var(--space-xs);
+    padding-block: var(--space-sm);
   }
 
   .wordmark__logo {

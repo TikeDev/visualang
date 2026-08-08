@@ -27,7 +27,7 @@ describe('JobProgress', () => {
       />
     )
 
-    expect(screen.getByText('Your progress is saved. Nothing is lost.')).toBeVisible()
+    expect(screen.getByText('Your progress is saved.')).toBeVisible()
     expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled()
   })
 
