@@ -35,7 +35,7 @@ export default function Stepper({ job }) {
             aria-current={state === 'current' ? 'step' : undefined}
           >
             <span className="stepper__node" aria-hidden="true">
-              {state === 'complete' && <Check size={10} weight="bold" />}
+              {state === 'complete' && <Check size={13} weight="bold" />}
             </span>
             <span className="stepper__label">{stage.label}</span>
             {index < DISPLAY_STAGES.length - 1 && (

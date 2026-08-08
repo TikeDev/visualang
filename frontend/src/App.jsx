@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { FileText, ImagesSquare, Moon, Sun, VideoCamera } from '@phosphor-icons/react'
+import { FileText, FilmSlate, ImagesSquare, Moon, Sun, VideoCamera } from '@phosphor-icons/react'
 import { API_URL } from './config.js'
 import {
   buildResumeUrl,
@@ -250,9 +250,10 @@ export default function App() {
           {job && (
             <button
               type="button"
-              className="button button--secondary button--bar"
+              className="button button--secondary button--bar new-visualization-button"
               onClick={resetToIdle}
             >
+              <FilmSlate size={18} weight="bold" aria-hidden="true" />
               New Visualization
             </button>
           )}

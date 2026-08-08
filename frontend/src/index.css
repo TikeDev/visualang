@@ -578,6 +578,18 @@ a {
   font-weight: 700;
 }
 
+.new-visualization-button {
+  padding-inline: 1rem;
+  font-size: .9rem;
+  background: rgba(143, 167, 255, 0.22);
+  color: #dbe3ff;
+  border-color: rgba(143, 167, 255, 0.4);
+}
+
+.new-visualization-button:hover:not(:disabled) {
+  background: rgba(143, 167, 255, 0.32);
+}
+
 /* Notices */
 
 .notice {
