@@ -34,3 +34,9 @@ services:
         sync: false
       - key: YT_DLP_DENO_PATH
         sync: false
+      - key: LANGFUSE_PUBLIC_KEY
+        sync: false
+      - key: LANGFUSE_SECRET_KEY
+        sync: false
+      - key: LANGFUSE_HOST
+        sync: false

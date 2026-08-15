@@ -114,6 +114,11 @@ NUNCHAKU_ENABLE_REWRITE_RECOVERY = IMAGE_ENABLE_REWRITE_RECOVERY
 # Claude settings
 CLAUDE_MODEL = "claude-sonnet-4-6"
 
+# Langfuse observability settings
+LANGFUSE_PUBLIC_KEY = _get_optional_str("LANGFUSE_PUBLIC_KEY")
+LANGFUSE_SECRET_KEY = _get_optional_str("LANGFUSE_SECRET_KEY")
+LANGFUSE_HOST = _get_optional_str("LANGFUSE_HOST") or "https://cloud.langfuse.com"
+
 # System prompt
 SYSTEM_PROMPT = """
 You are a visual companion generator for language learning videos. Given a transcript with

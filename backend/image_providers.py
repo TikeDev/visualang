@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 import requests
 
+import observability
 from config import (
     CLOUDFLARE_ACCOUNT_ID,
     CLOUDFLARE_API_TOKEN,
@@ -74,6 +75,37 @@ def _retry_delay(response, attempt: int, base_seconds: float) -> float:
 
 
 def call_cloudflare(
+    prompt: str,
+    *,
+    post_fn=requests.post,
+    sleep_fn=time.sleep,
+) -> GeneratedImage:
+    with observability.observe(
+        as_type="generation",
+        name="cloudflare_image_generation",
+        model=CLOUDFLARE_MODEL,
+        input={"prompt": prompt},
+    ) as generation:
+        try:
+            result = _call_cloudflare(prompt, post_fn=post_fn, sleep_fn=sleep_fn)
+        except Exception as exc:
+            observability.update(generation, level="ERROR", status_message=str(exc))
+            raise
+        if generation is not None:
+            from langfuse.media import LangfuseMedia
+
+            observability.update(
+                generation,
+                output={
+                    "image": LangfuseMedia(
+                        content_bytes=result.image_bytes, content_type="image/jpeg"
+                    )
+                },
+            )
+        return result
+
+
+def _call_cloudflare(
     prompt: str,
     *,
     post_fn=requests.post,
@@ -176,6 +208,47 @@ def _reserve_nunchaku_slot(now_fn=time.monotonic) -> float:
 
 
 def call_nunchaku(
+    prompt: str,
+    model: str = NUNCHAKU_MODEL,
+    tier: str = NUNCHAKU_TIER,
+    *,
+    post_fn=requests.post,
+    sleep_fn=time.sleep,
+    now_fn=time.monotonic,
+) -> GeneratedImage:
+    with observability.observe(
+        as_type="generation",
+        name="nunchaku_image_generation",
+        model=model,
+        input={"prompt": prompt},
+    ) as generation:
+        try:
+            result = _call_nunchaku(
+                prompt,
+                model,
+                tier,
+                post_fn=post_fn,
+                sleep_fn=sleep_fn,
+                now_fn=now_fn,
+            )
+        except Exception as exc:
+            observability.update(generation, level="ERROR", status_message=str(exc))
+            raise
+        if generation is not None:
+            from langfuse.media import LangfuseMedia
+
+            observability.update(
+                generation,
+                output={
+                    "image": LangfuseMedia(
+                        content_bytes=result.image_bytes, content_type="image/jpeg"
+                    )
+                },
+            )
+        return result
+
+
+def _call_nunchaku(
     prompt: str,
     model: str = NUNCHAKU_MODEL,
     tier: str = NUNCHAKU_TIER,

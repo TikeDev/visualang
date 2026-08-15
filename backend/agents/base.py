@@ -17,6 +17,8 @@ from typing import Any, Callable
 import anthropic
 from anthropic import APIStatusError
 
+import observability
+
 logger = logging.getLogger(__name__)
 
 
@@ -65,55 +67,90 @@ async def run_claude(
 ) -> str:
     """Single-turn Claude call with OpenAI fallback on 5xx. Returns text only."""
     t0 = time.monotonic()
-    try:
-        client = _get_anthropic()
-        resp = await client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
-            messages=[{"role": "user", "content": user}],
-        )
-        text = "".join(b.text for b in resp.content if b.type == "text")
-        elapsed_ms = int((time.monotonic() - t0) * 1000)
-        _record(f"claude_{model}_ms", elapsed_ms)
-        _record("claude_calls", 1)
-        logger.info(
-            "claude %s: %d in, %d out, %dms",
-            model,
-            resp.usage.input_tokens,
-            resp.usage.output_tokens,
-            elapsed_ms,
-        )
-        return text
-    except APIStatusError as e:
-        if 500 <= e.status_code < 600:
-            _record("anthropic_5xx_fallback", 1)
-            logger.warning("Anthropic %d — falling back to OpenAI", e.status_code)
-            return await _openai_fallback(system=system, user=user, max_tokens=max_tokens)
-        raise
+    with observability.observe(
+        as_type="generation",
+        name="run_claude",
+        model=model,
+        input={"system": system, "user": user},
+    ) as generation:
+        try:
+            client = _get_anthropic()
+            resp = await client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+                messages=[{"role": "user", "content": user}],
+            )
+            text = "".join(b.text for b in resp.content if b.type == "text")
+            elapsed_ms = int((time.monotonic() - t0) * 1000)
+            _record(f"claude_{model}_ms", elapsed_ms)
+            _record("claude_calls", 1)
+            logger.info(
+                "claude %s: %d in, %d out, %dms",
+                model,
+                resp.usage.input_tokens,
+                resp.usage.output_tokens,
+                elapsed_ms,
+            )
+            observability.update(
+                generation,
+                output=text,
+                usage_details={
+                    "input": resp.usage.input_tokens,
+                    "output": resp.usage.output_tokens,
+                },
+            )
+            return text
+        except APIStatusError as e:
+            if 500 <= e.status_code < 600:
+                _record("anthropic_5xx_fallback", 1)
+                logger.warning("Anthropic %d — falling back to OpenAI", e.status_code)
+                observability.update(generation, metadata={"fallback": "openai"})
+                return await _openai_fallback(system=system, user=user, max_tokens=max_tokens)
+            raise
 
 
 async def _openai_fallback(*, system: str, user: str, max_tokens: int) -> str:
     from .prompts import OPENAI_FALLBACK
 
     t0 = time.monotonic()
-    client = _get_openai()
-    resp = await client.chat.completions.create(
+    with observability.observe(
+        as_type="generation",
+        name="openai_fallback",
         model=OPENAI_FALLBACK,
-        max_tokens=max_tokens,
-        temperature=0.0,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-    )
-    logger.info(
-        "openai %s fallback: %dms",
-        OPENAI_FALLBACK,
-        int((time.monotonic() - t0) * 1000),
-    )
-    return resp.choices[0].message.content or ""
+        input={"system": system, "user": user},
+    ) as generation:
+        client = _get_openai()
+        resp = await client.chat.completions.create(
+            model=OPENAI_FALLBACK,
+            max_tokens=max_tokens,
+            temperature=0.0,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+        )
+        logger.info(
+            "openai %s fallback: %dms",
+            OPENAI_FALLBACK,
+            int((time.monotonic() - t0) * 1000),
+        )
+        text = resp.choices[0].message.content or ""
+        usage = getattr(resp, "usage", None)
+        observability.update(
+            generation,
+            output=text,
+            usage_details=(
+                {
+                    "input": usage.prompt_tokens,
+                    "output": usage.completion_tokens,
+                }
+                if usage is not None
+                else None
+            ),
+        )
+        return text
 
 
 async def run_claude_with_tools(
@@ -139,22 +176,39 @@ async def run_claude_with_tools(
 
     for iteration in range(max_iterations):
         t0 = time.monotonic()
-        resp = await client.messages.create(
+        with observability.observe(
+            as_type="generation",
+            name="run_claude_with_tools",
             model=model,
-            max_tokens=max_tokens,
-            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
-            tools=tools,
-            messages=messages,
-        )
-        logger.info(
-            "claude %s iter %d: stop=%s, %d in, %d out, %dms",
-            model,
-            iteration,
-            resp.stop_reason,
-            resp.usage.input_tokens,
-            resp.usage.output_tokens,
-            int((time.monotonic() - t0) * 1000),
-        )
+            input={"system": system, "messages": messages},
+            metadata={"iteration": iteration},
+        ) as generation:
+            resp = await client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+                tools=tools,
+                messages=messages,
+            )
+            logger.info(
+                "claude %s iter %d: stop=%s, %d in, %d out, %dms",
+                model,
+                iteration,
+                resp.stop_reason,
+                resp.usage.input_tokens,
+                resp.usage.output_tokens,
+                int((time.monotonic() - t0) * 1000),
+            )
+            final_text = "".join(b.text for b in resp.content if b.type == "text")
+            observability.update(
+                generation,
+                output=final_text,
+                usage_details={
+                    "input": resp.usage.input_tokens,
+                    "output": resp.usage.output_tokens,
+                },
+                metadata={"stop_reason": resp.stop_reason},
+            )
 
         if resp.stop_reason == "end_turn":
             return "".join(b.text for b in resp.content if b.type == "text")

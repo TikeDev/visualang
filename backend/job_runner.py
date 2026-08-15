@@ -6,6 +6,7 @@ import logging
 import threading
 from typing import Any, Awaitable, Callable
 
+import observability
 from job_store import JobStore
 
 logger = logging.getLogger(__name__)
@@ -80,51 +81,71 @@ class JobRunner:
         if current is not None:
             self._tasks[job_id] = current
 
-        try:
-            self.store.update(job_id, status="running", error=None)
-            job = self._job_row(job_id)
+        job = self._job_row(job_id)
+        trace_output: dict[str, Any] = {}
+        with observability.observe(
+            as_type="span",
+            name="visualang-job",
+            input={"source": job.get("source")},
+            metadata={"job_id": job_id},
+        ) as trace:
+            try:
+                self.store.update(job_id, status="running", error=None)
+                job = self._job_row(job_id)
 
-            stage_index = _STAGE_INDEX[start_stage]
+                stage_index = _STAGE_INDEX[start_stage]
 
-            if stage_index <= _STAGE_INDEX["transcript"]:
-                transcript = await self.transcript_fn(
-                    job["source"], cancel_event=cancel_event
-                )
-                job = self.store.update(
-                    job_id, transcript=transcript, stage="concepts"
-                )
+                if stage_index <= _STAGE_INDEX["transcript"]:
+                    with observability.observe(as_type="span", name="transcript"):
+                        transcript = await self.transcript_fn(
+                            job["source"], cancel_event=cancel_event
+                        )
+                    job = self.store.update(
+                        job_id, transcript=transcript, stage="concepts"
+                    )
 
-            if stage_index <= _STAGE_INDEX["concepts"]:
-                concepts = await self.concepts_fn(job["transcript"])
-                job = self.store.update(
-                    job_id, concepts=concepts, stage="generating_images"
-                )
+                if stage_index <= _STAGE_INDEX["concepts"]:
+                    with observability.observe(as_type="span", name="concepts"):
+                        concepts = await self.concepts_fn(job["transcript"])
+                    job = self.store.update(
+                        job_id, concepts=concepts, stage="generating_images"
+                    )
+                    trace_output["concept_count"] = len(concepts)
 
-            if stage_index <= _STAGE_INDEX["generating_images"]:
-                images = await self.images_fn(
-                    job["concepts"], cancel_event=cancel_event
-                )
-                job = self.store.update(job_id, images=images, stage="export")
+                if stage_index <= _STAGE_INDEX["generating_images"]:
+                    with observability.observe(as_type="span", name="generating_images"):
+                        images = await self.images_fn(
+                            job["concepts"], cancel_event=cancel_event
+                        )
+                    job = self.store.update(job_id, images=images, stage="export")
+                    trace_output["image_count"] = len(images)
 
-            if stage_index <= _STAGE_INDEX["export"]:
-                result = await self.export_fn(
-                    job["transcript"],
-                    job["images"],
-                    self.store.job_dir(job_id),
-                    job_id=job_id,
-                )
-                job = self.store.update(job_id, **result)
+                if stage_index <= _STAGE_INDEX["export"]:
+                    with observability.observe(as_type="span", name="export"):
+                        result = await self.export_fn(
+                            job["transcript"],
+                            job["images"],
+                            self.store.job_dir(job_id),
+                            job_id=job_id,
+                        )
+                    job = self.store.update(job_id, **result)
 
-            self.store.update(job_id, status="done")
-        except asyncio.CancelledError:
-            self.store.update(job_id, status="cancelled")
-            raise
-        except Exception as error:
-            stage = self._job_row(job_id).get("stage", start_stage)
-            logger.exception("Job %s failed at stage %s", job_id, stage)
-            self.store.update(job_id, status="error", error=str(error))
-        finally:
-            self._tasks.pop(job_id, None)
+                self.store.update(job_id, status="done")
+                trace_output["status"] = "done"
+            except asyncio.CancelledError:
+                self.store.update(job_id, status="cancelled")
+                trace_output["status"] = "cancelled"
+                raise
+            except Exception as error:
+                stage = self._job_row(job_id).get("stage", start_stage)
+                logger.exception("Job %s failed at stage %s", job_id, stage)
+                self.store.update(job_id, status="error", error=str(error))
+                trace_output["status"] = "error"
+                trace_output["stage"] = stage
+            finally:
+                observability.update(trace, output=trace_output)
+                observability.flush()
+                self._tasks.pop(job_id, None)
 
     def _job_row(self, job_id: str) -> dict:
         with self.store._connect() as connection:  # noqa: SLF001

@@ -10,3 +10,4 @@ httpx
 ffmpeg-python
 python-multipart
 flake8
+langfuse
