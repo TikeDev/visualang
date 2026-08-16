@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from contextlib import contextmanager
 
-from config import LANGFUSE_HOST, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY
+from config import LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY
 
 logger = logging.getLogger(__name__)
 

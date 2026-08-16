@@ -246,6 +246,8 @@ async def rate_visualizability_handler(*, concepts: list[dict]) -> dict:
     )
     try:
         ratings = base.parse_json_strict(text)
+        if not isinstance(ratings, list):
+            raise ValueError(f"critique returned non-list: {type(ratings).__name__}")
         return {"ratings": ratings}
     except ValueError:
         return {"ratings": [], "error": "critique returned malformed JSON"}

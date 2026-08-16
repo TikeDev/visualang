@@ -1,21 +1,20 @@
 # VisuaLang
 
-VisuaLang is a language-learning video companion built with React and FastAPI. It takes a YouTube video or Shorts URL, or an uploaded audio file, extracts a transcript, turns key moments into storybook-style images, previews the sequence in the browser, and exports a downloadable video package.
+VisuaLang is a language-learning video companion, built with React and FastAPI. Give it a YouTube video, a YouTube Shorts link, or an audio file, and it turns the spoken words into a storybook-style illustrated video you can watch and download.
 
-> ⚠️ At the moment, YouTube video and Shorts links only work reliably in local development.
-On the deployed app, YouTube ingestion may fail because hosted environments like Render are often blocked by YouTube.
+## Why VisuaLang
+
+People learn a language by understanding messages that are just slightly beyond what they already know, not by memorizing grammar rules. For that to work, the meaning has to be clear from context.
+
+Audio-only content, like podcasts and interviews, usually doesn't give a learner that context. VisuaLang adds it back: it turns spoken language into illustrations tied to the words being said, so a listener has something to lean on while picking up new vocabulary.
 
 ## What VisuaLang Does Today
 
-- Accepts a YouTube video link, YouTube Shorts link, or local audio upload.
-- Fetches YouTube captions when available and falls back to transcribing extracted audio when they are not.
-- Runs a transcript gate before the expensive parts of the pipeline.
-- Extracts visual concepts with backend runtime agents.
-- Streams image generation progress from the backend to the frontend.
-- Previews synced audio + illustrated scenes in the browser player.
-- Runs the whole pipeline as a single resumable job, with a shareable resume link so a run can survive a reload or be picked up from another tab.
-- Starts an FFmpeg export job in the background and exposes video, transcript, and image downloads.
-- Supports seeded demo fixtures and lightweight in-memory metrics for demos.
+- Takes a YouTube link, YouTube Shorts link, or audio upload and gets a transcript.
+- Uses AI to pick out visual moments and generate storybook-style illustrations for them.
+- Previews the synced audio and illustrated scenes right in the browser.
+- Exports a downloadable video, along with the transcript and images.
+- Saves progress as you go, so a run survives a reload or can be picked up later from a shared link.
 
 ## Visitor Flow
 
@@ -27,7 +26,11 @@ On the deployed app, YouTube ingestion may fail because hosted environments like
   />
 </p>
 
-## Repo Structure
+---
+
+## For Developers
+
+### Repo Structure
 
 ```text
 frontend/   React 19 + Vite app
@@ -35,16 +38,16 @@ backend/    FastAPI app, runtime agents, routers, export pipeline
 tests/      VisuaLang-focused tests
 ```
 
-## Local Development
+### Local Development
 
-### Prerequisites
+#### Prerequisites
 
 - Node.js with `pnpm`
 - Python 3
 - Deno available on your shell path for YouTube extraction through `yt-dlp`
 - `ffmpeg` available on your shell path for video export
 
-### Quick start
+#### Quick start
 
 1. Install frontend and root workspace dependencies:
 
@@ -78,7 +81,7 @@ The root `pnpm dev` script starts:
 
 Because of that, make sure the Python environment with `uvicorn` and backend dependencies is active in the same shell before you run `pnpm dev`.
 
-### Run services separately
+#### Run services separately
 
 Backend:
 
@@ -101,11 +104,11 @@ cd frontend
 pnpm build
 ```
 
-## Environment Setup
+### Environment Setup
 
 Keep all env files local only. `.env`, `.env.local`, `frontend/.env`, and `backend/.env` are gitignored and should stay that way.
 
-### Backend: `backend/.env`
+#### Backend: `backend/.env`
 
 The backend requires these variables:
 
@@ -129,22 +132,24 @@ IMAGE_GENERATION_CONCURRENCY=4
 IMAGE_ENABLE_REWRITE_RECOVERY=false
 CLOUDFLARE_MAX_RETRIES=4
 CLOUDFLARE_BACKOFF_BASE_SECONDS=1.0
+LANGFUSE_PUBLIC_KEY=
+LANGFUSE_SECRET_KEY=
 ```
 
 Notes:
 
 - `CORS_ALLOWED_ORIGINS` is a comma-separated list.
-- Hosted YouTube ingestion on Render is likely to fail without a rotating proxy because YouTube blocks many cloud-provider IPs.
+- Hosted YouTube ingestion on Render requires a rotating proxy because YouTube blocks many cloud-provider IPs. Production currently runs with a Webshare proxy configured through these vars.
 - Set `YOUTUBE_PROXY_ENABLED=true` and configure `YOUTUBE_PROXY_HTTP_URL` and/or `YOUTUBE_PROXY_HTTPS_URL` when you want hosted YouTube transcript fetches and `yt-dlp` requests to run through a proxy.
 - If only one proxy URL is provided, the backend reuses it for both transcript fetches and `yt-dlp` requests.
 - `YT_DLP_DENO_PATH` is optional. Leave it empty when `deno` is already on `PATH`; set it to the Deno executable path if the backend process cannot find Deno.
 - Cloudflare Workers AI is the default image provider and requires an account ID plus a token with Workers AI Read and Edit permissions.
 - `IMAGE_GENERATION_CONCURRENCY` defaults to 4. Progress streams as images finish; the final list stays in transcript order.
 - Cloudflare includes a daily free Workers AI allocation. Usage beyond it requires Cloudflare's paid Workers plan.
-- Nunchaku support still exists in code (`IMAGE_PROVIDER=nunchaku`) but the Nunchaku API is not currently available — do not treat it as a working fallback; Cloudflare is the only supported provider for now.
 - Generated images and uploaded audio are stored under `/tmp/visualang_images`.
+- `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` enable Langfuse tracing for the runtime agents and image generation calls. Leave them unset to disable tracing entirely; it fails silently and never breaks a job.
 
-### Frontend: `frontend/.env`
+#### Frontend: `frontend/.env`
 
 ```bash
 VITE_API_URL=http://localhost:8000
@@ -152,7 +157,7 @@ VITE_API_URL=http://localhost:8000
 
 If omitted, the frontend falls back to `http://localhost:8000`.
 
-## How The Pipeline Works
+### How The Pipeline Works
 
 The backend runs the whole pipeline as a single resumable **job** that moves through four stages: transcript → concepts → image generation → export.
 
@@ -165,9 +170,10 @@ The older single-shot `/transcript`, `/concepts`, `/generate`, and `/export` end
 
 See [backend/job_runner.py](backend/job_runner.py) and [backend/routers/jobs.py](backend/routers/jobs.py) for stage and endpoint details.
 
-## Contributor Notes
+### Contributor Notes
 
 - The backend runtime agents are documented in [backend/AGENTS.md](backend/AGENTS.md).
+- Langfuse tracing setup is documented in [docs/langfuse-guide.md](docs/langfuse-guide.md).
 - The main frontend orchestration lives in `frontend/src/App.jsx`.
 - The browser preview player lives in `frontend/src/components/Player.jsx`.
 - Generated assets are served from `/tmp/visualang_images` through `/images/*` and `/media/audio/*`.
@@ -175,25 +181,19 @@ See [backend/job_runner.py](backend/job_runner.py) and [backend/routers/jobs.py]
 - `GET /health` is the basic backend health check.
 - `GET /metrics` and `POST /metrics/reset` are in-memory demo-oriented endpoints, not production monitoring.
 
-## Testing
+### Testing
 
 For test coverage, conventions, and troubleshooting notes, see [tests/TESTS_GUIDE.md](tests/TESTS_GUIDE.md).
 
-Run the local VisuaLang test suite:
+Run the test suite:
 
 ```bash
-pytest tests/test_visualang_phase2.py -v
-pytest tests/test_generate.py -v
-pytest tests/test_export.py -v
+pytest tests/ -v
 ```
 
-Notes:
-
-- These tests cover the current VisuaLang app rather than the old fork extras.
-- `tests/test_generate.py` may require a valid `NUNCHAKU_API_KEY` depending on the path being exercised.
-
-## Related Documentation
+### Related Documentation
 
 - [backend/AGENTS.md](backend/AGENTS.md) for runtime agent behavior, model usage, and router integration
+- [docs/langfuse-guide.md](docs/langfuse-guide.md) for Langfuse tracing setup
 - [render.yaml](render.yaml) for the Render service definitions
 - [visualang-prompt-for-claude-code.md](visualang-prompt-for-claude-code.md) for the original build spec and product framing

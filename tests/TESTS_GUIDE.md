@@ -50,13 +50,13 @@ pytest tests -x -v
 |------|--------|
 | `test_config.py` | Environment variable parsing, especially YouTube proxy settings. |
 | `test_visualang_phase2.py` | Transcript routes, YouTube and upload ingestion, transcript gate handling, proxy behavior, concept extraction errors, and audio media serving. |
-| `test_generate.py` | Nunchaku request retry behavior, `429` backoff, request spacing, and prompt rewrite recovery. |
+| `test_generate.py` | Cloudflare request retry behavior, `429` backoff, and prompt rewrite recovery. |
 | `test_export.py` | Ken Burns variant selection, transition planning, FFmpeg argument generation, export route job setup, transcript output, and image zip artifacts. |
 
 ## Test Conventions
 
 - Mock provider and network boundaries with `monkeypatch`; normal tests should
-  not make live OpenAI, Anthropic, Nunchaku, YouTube, or proxy requests.
+  not make live OpenAI, Anthropic, Cloudflare, YouTube, or proxy requests.
 - Prefer focused route and helper tests over broad end-to-end tests. Most tests
   validate one backend behavior and stub expensive dependencies.
 - Use FastAPI `TestClient` for route behavior when HTTP status codes and
@@ -75,5 +75,5 @@ pytest tests -x -v
   when `ffmpeg` is not available on the shell path.
 - The rest of the suite should run without external services as long as Python
   dependencies are installed.
-- `tests/test_generate.py` validates Nunchaku request construction and retry
+- `tests/test_generate.py` validates Cloudflare request construction and retry
   behavior with fake responses, not live image generation.

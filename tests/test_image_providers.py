@@ -25,17 +25,6 @@ class FakeResponse:
         return self._payload
 
 
-@pytest.fixture(autouse=True)
-def reset_provider_state(monkeypatch):
-    monkeypatch.setattr(image_providers, "_NEXT_NUNCHAKU_ATTEMPT_AT", 0.0)
-    monkeypatch.setattr(
-        image_providers, "NUNCHAKU_API_KEY", "test-nunchaku-key"
-    )
-    monkeypatch.setattr(image_providers, "NUNCHAKU_MIN_INTERVAL_SECONDS", 2.0)
-    monkeypatch.setattr(image_providers, "NUNCHAKU_MAX_429_RETRIES", 4)
-    monkeypatch.setattr(image_providers, "NUNCHAKU_BACKOFF_BASE_SECONDS", 3.0)
-
-
 def test_image_provider_defaults_to_cloudflare():
     env = os.environ.copy()
     env.pop("IMAGE_PROVIDER", None)
@@ -241,41 +230,3 @@ def test_call_cloudflare_retries_connection_errors_and_sanitizes_failure(
 
     assert "secret-token" not in str(exc.value)
     assert sleeps == [1.0, 2.0]
-
-
-def test_call_nunchaku_success_first_attempt():
-    encoded = base64.b64encode(b"image").decode("ascii")
-    result = image_providers.call_nunchaku(
-        "prompt",
-        post_fn=lambda *args, **kwargs: FakeResponse(
-            200, {"data": [{"b64_json": encoded}]}
-        ),
-    )
-
-    assert result.image_bytes == b"image"
-    assert result.provider == "nunchaku"
-
-
-def test_call_nunchaku_retries_and_enforces_spacing():
-    encoded = base64.b64encode(b"ok").decode("ascii")
-    responses = [
-        FakeResponse(429, headers={"Retry-After": "5"}),
-        FakeResponse(200, {"data": [{"b64_json": encoded}]}),
-        FakeResponse(200, {"data": [{"b64_json": encoded}]}),
-    ]
-    sleeps = []
-    current_time = [0.0]
-
-    def fake_sleep(seconds):
-        sleeps.append(seconds)
-        current_time[0] += seconds
-
-    for prompt in ("one", "two"):
-        image_providers.call_nunchaku(
-            prompt,
-            post_fn=lambda *args, **kwargs: responses.pop(0),
-            sleep_fn=fake_sleep,
-            now_fn=lambda: current_time[0],
-        )
-
-    assert sleeps == [5.0, 2.0]

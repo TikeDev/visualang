@@ -22,8 +22,6 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
-      - key: NUNCHAKU_API_KEY
-        sync: false
       - key: CORS_ALLOWED_ORIGINS
         sync: false
       - key: YOUTUBE_PROXY_ENABLED

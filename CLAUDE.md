@@ -66,7 +66,7 @@ When changing job semantics, update `STAGE_ORDER`/`_STAGE_INDEX` in `job_runner.
 
 ### Image generation providers
 
-`backend/image_providers.py` abstracts image generation behind `call_cloudflare` / `call_nunchaku`, both returning a `GeneratedImage(image_bytes, provider, model)` or raising `ImageProviderError` / `ImageContentPolicyError` (sanitized, API-safe messages). `IMAGE_PROVIDER` env var selects the active provider (`cloudflare` default, `nunchaku` fallback). Cloudflare Workers AI is called directly over REST using `CLOUDFLARE_ACCOUNT_ID`/`CLOUDFLARE_API_TOKEN`; retries respect `Retry-After` headers with exponential backoff capped at `MAX_BACKOFF_SECONDS`. Nunchaku additionally self-throttles across calls via a module-level lock (`_NUNCHAKU_THROTTLE_LOCK` / `_NEXT_NUNCHAKU_ATTEMPT_AT`) since it has a stricter rate limit than Cloudflare.
+`backend/image_providers.py` abstracts image generation behind `call_cloudflare`, returning a `GeneratedImage(image_bytes, provider, model)` or raising `ImageProviderError` / `ImageContentPolicyError` (sanitized, API-safe messages). `IMAGE_PROVIDER` env var selects the active provider (`cloudflare` default). Cloudflare Workers AI is called directly over REST using `CLOUDFLARE_ACCOUNT_ID`/`CLOUDFLARE_API_TOKEN`; retries respect `Retry-After` headers with exponential backoff capped at `MAX_BACKOFF_SECONDS`.
 
 `backend/routers/generate.py` fans concept-to-image generation out concurrently (ceiling: `IMAGE_GENERATION_CONCURRENCY`), streams progress in completion order over SSE while preserving transcript order in the final list, and retries provider 429s/5xx with backoff. When `IMAGE_ENABLE_REWRITE_RECOVERY` is on, a Haiku vision check can trigger `ImagePromptRewriter` and a single regeneration attempt — see `backend/AGENTS.md` for the agent side of this.
 
@@ -84,7 +84,7 @@ Three async agents in `backend/agents/` (Anthropic SDK, hand-rolled state machin
 ## Notes
 
 - Keep `.env`, `.env.local`, `backend/.env`, and `frontend/.env` out of git.
-- `tests/test_generate.py` and `tests/test_image_providers.py` exercise both Cloudflare and Nunchaku code paths; check which env vars/mocks a given test expects before assuming a real API key is required.
+- `tests/test_generate.py` and `tests/test_image_providers.py` exercise the Cloudflare code path; check which env vars/mocks a given test expects before assuming a real API key is required.
 - Generated backend assets are served from `VISUALANG_DATA_DIR` (defaults to `/tmp/visualang_data`), with jobs under `jobs/<job_id>/` and images under `artifacts/`.
 
 ## Related Documentation

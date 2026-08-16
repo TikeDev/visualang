@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import binascii
 import logging
-import threading
 import time
 from dataclasses import dataclass
 
@@ -17,21 +16,11 @@ from config import (
     CLOUDFLARE_MAX_RETRIES,
     CLOUDFLARE_MODEL,
     IMAGE_PROVIDER,
-    NUNCHAKU_API_KEY,
-    NUNCHAKU_BACKOFF_BASE_SECONDS,
-    NUNCHAKU_BASE_URL,
-    NUNCHAKU_MAX_429_RETRIES,
-    NUNCHAKU_MIN_INTERVAL_SECONDS,
-    NUNCHAKU_MODEL,
-    NUNCHAKU_NEGATIVE_PROMPT,
-    NUNCHAKU_TIER,
 )
 
 logger = logging.getLogger(__name__)
 
 MAX_BACKOFF_SECONDS = 12.0
-_NUNCHAKU_THROTTLE_LOCK = threading.Lock()
-_NEXT_NUNCHAKU_ATTEMPT_AT = 0.0
 
 
 @dataclass(frozen=True)
@@ -197,138 +186,8 @@ def _call_cloudflare(
     raise ImageProviderError("Cloudflare retry loop exited unexpectedly")
 
 
-def _reserve_nunchaku_slot(now_fn=time.monotonic) -> float:
-    global _NEXT_NUNCHAKU_ATTEMPT_AT
-
-    with _NUNCHAKU_THROTTLE_LOCK:
-        now = now_fn()
-        reserved_at = max(now, _NEXT_NUNCHAKU_ATTEMPT_AT)
-        _NEXT_NUNCHAKU_ATTEMPT_AT = reserved_at + NUNCHAKU_MIN_INTERVAL_SECONDS
-    return max(0.0, reserved_at - now)
-
-
-def call_nunchaku(
-    prompt: str,
-    model: str = NUNCHAKU_MODEL,
-    tier: str = NUNCHAKU_TIER,
-    *,
-    post_fn=requests.post,
-    sleep_fn=time.sleep,
-    now_fn=time.monotonic,
-) -> GeneratedImage:
-    with observability.observe(
-        as_type="generation",
-        name="nunchaku_image_generation",
-        model=model,
-        input={"prompt": prompt},
-    ) as generation:
-        try:
-            result = _call_nunchaku(
-                prompt,
-                model,
-                tier,
-                post_fn=post_fn,
-                sleep_fn=sleep_fn,
-                now_fn=now_fn,
-            )
-        except Exception as exc:
-            observability.update(generation, level="ERROR", status_message=str(exc))
-            raise
-        if generation is not None:
-            from langfuse.media import LangfuseMedia
-
-            observability.update(
-                generation,
-                output={
-                    "image": LangfuseMedia(
-                        content_bytes=result.image_bytes, content_type="image/jpeg"
-                    )
-                },
-            )
-        return result
-
-
-def _call_nunchaku(
-    prompt: str,
-    model: str = NUNCHAKU_MODEL,
-    tier: str = NUNCHAKU_TIER,
-    *,
-    post_fn=requests.post,
-    sleep_fn=time.sleep,
-    now_fn=time.monotonic,
-) -> GeneratedImage:
-    if not NUNCHAKU_API_KEY:
-        raise ImageProviderError(
-            "NUNCHAKU_API_KEY is required when IMAGE_PROVIDER=nunchaku"
-        )
-
-    for attempt in range(NUNCHAKU_MAX_429_RETRIES + 1):
-        spacing_delay = _reserve_nunchaku_slot(now_fn=now_fn)
-        if spacing_delay > 0:
-            sleep_fn(spacing_delay)
-
-        response = post_fn(
-            f"{NUNCHAKU_BASE_URL}/v1/images/generations",
-            headers={
-                "Authorization": f"Bearer {NUNCHAKU_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": model,
-                "prompt": prompt,
-                "n": 1,
-                "size": "1024x1024",
-                "tier": tier,
-                "response_format": "b64_json",
-                "negative_prompt": NUNCHAKU_NEGATIVE_PROMPT,
-            },
-            timeout=60,
-        )
-        if (
-            response.status_code == 429
-            and attempt < NUNCHAKU_MAX_429_RETRIES
-        ):
-            sleep_fn(
-                _retry_delay(
-                    response,
-                    attempt,
-                    NUNCHAKU_BACKOFF_BASE_SECONDS,
-                )
-            )
-            continue
-        if response.status_code >= 400:
-            raise ImageProviderError(
-                "Nunchaku image generation failed with status "
-                f"{response.status_code}"
-            )
-
-        try:
-            encoded = response.json()["data"][0]["b64_json"]
-            image_bytes = base64.b64decode(encoded, validate=True)
-        except (
-            KeyError,
-            IndexError,
-            TypeError,
-            ValueError,
-            binascii.Error,
-        ) as exc:
-            raise ImageProviderError(
-                "Nunchaku returned an invalid response"
-            ) from exc
-
-        return GeneratedImage(
-            image_bytes=image_bytes,
-            provider="nunchaku",
-            model=model,
-        )
-
-    raise ImageProviderError("Nunchaku retry loop exited unexpectedly")
-
-
 def generate(prompt: str, provider: str | None = None) -> GeneratedImage:
     selected = (provider or IMAGE_PROVIDER).lower()
     if selected == "cloudflare":
         return call_cloudflare(prompt)
-    if selected == "nunchaku":
-        return call_nunchaku(prompt)
     raise ImageProviderError(f"Unsupported image provider: {selected}")

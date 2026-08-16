@@ -59,13 +59,9 @@ agents/
 - `OPENAI_API_KEY` — used only if Anthropic returns 5xx (fallback to `gpt-4.1`)
 - `CLOUDFLARE_ACCOUNT_ID` — account used by the Workers AI REST endpoint
 - `CLOUDFLARE_API_TOKEN` — token with Workers AI Read and Edit permissions
-- `IMAGE_PROVIDER` — defaults to `cloudflare`; set `nunchaku` for the fallback
+- `IMAGE_PROVIDER` — defaults to `cloudflare`
 - `IMAGE_GENERATION_CONCURRENCY` — parallel concept ceiling, default `4`
 - `IMAGE_ENABLE_REWRITE_RECOVERY` — opt-in retry after vision text detection
-- `NUNCHAKU_API_KEY` — required only when `IMAGE_PROVIDER=nunchaku`
-- `NUNCHAKU_MIN_INTERVAL_SECONDS` — minimum gap between Nunchaku attempts
-- `NUNCHAKU_MAX_429_RETRIES` — retry budget for `429 Too Many Requests`
-- `NUNCHAKU_BACKOFF_BASE_SECONDS` — fallback backoff when `Retry-After` is missing
 
 ## Model swaps
 
