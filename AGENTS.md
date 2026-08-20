@@ -71,7 +71,7 @@ pnpm test
 
 ## Environment
 
-- Backend expects `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_API_TOKEN` in `backend/.env`. Nunchaku credentials are fallback-only (`IMAGE_PROVIDER=nunchaku`).
+- Backend expects `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_API_TOKEN` in `backend/.env`.
 - Frontend uses `VITE_API_URL` and defaults to `http://localhost:8000`.
 - Generated backend assets (jobs, images) are served from `VISUALANG_DATA_DIR` (defaults to `/tmp/visualang_data`); images are exposed at `/images/*`.
 
@@ -95,7 +95,7 @@ pnpm test
   - `backend/routers/metrics.py` — rolling latency percentiles, in-memory.
   - `backend/routers/demo.py` — serves seeded fixtures from `backend/scripts/seed_demo.py`.
 - `backend/job_store.py` (`JobStore`, SQLite-backed) and `backend/job_runner.py` (`JobRunner`, stage state machine) implement the resumable job model. See [`CLAUDE.md`](CLAUDE.md) for the full job lifecycle and the resume-token security model.
-- `backend/image_providers.py` abstracts Cloudflare Workers AI vs. Nunchaku behind `call_cloudflare`/`call_nunchaku`; `IMAGE_PROVIDER` selects which one `generate.py` calls.
+- `backend/image_providers.py` wraps Cloudflare Workers AI behind `call_cloudflare`; `generate.py` calls it directly.
 - `backend/config.py` is the single source of truth for env-driven settings — add new env vars there.
 - Health check: `GET /health`.
 
@@ -111,7 +111,7 @@ pnpm test
 
 - `tests/test_visualang_phase2.py` covers orchestration flow.
 - `tests/test_generate.py` covers generation router behavior.
-- `tests/test_image_providers.py` covers the Cloudflare/Nunchaku provider abstraction.
+- `tests/test_image_providers.py` covers the Cloudflare provider abstraction.
 - `tests/test_export.py` covers export packaging behavior.
 - `frontend/src/jobState.test.js`, `frontend/src/jobApi.test.js`, `frontend/src/components/JobProgress.test.jsx` cover the frontend job lifecycle.
 

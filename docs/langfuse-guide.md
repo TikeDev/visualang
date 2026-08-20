@@ -125,7 +125,7 @@ with observability.observe(as_type="span", name="generating_images"):
     images = await self.images_fn(job["concepts"], cancel_event=cancel_event)
 ```
 
-For each concept, Visualang calls the image provider (Cloudflare or Nunchaku). Both `call_cloudflare()` and `call_nunchaku()` in [`backend/image_providers.py`](../backend/image_providers.py) open their own `GENERATION` span:
+For each concept, Visualang calls the image provider. `call_cloudflare()` in [`backend/image_providers.py`](../backend/image_providers.py) opens its own `GENERATION` span:
 
 ```python
 with observability.observe(
